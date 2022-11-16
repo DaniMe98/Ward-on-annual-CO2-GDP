@@ -41,7 +41,7 @@ object test
 object test
 {
   // Main Method
-  case class Country(index: String, country: String, year: String, co2: String, pop: String, temp: String)
+  case class Country(index: String, country: String, year: String, co2: String, gdp: String)
 
   def main(args: Array[String]): Unit = {
     var conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")
@@ -55,7 +55,7 @@ object test
     var empRdd = textRDD.map {
       line =>
         val col = line.split(",")
-        Country(col(0), col(1), col(2), col(3), col(4), col(5))
+        Country(col(0), col(1), col(2), col(3), col(4))
     }
     val empRddZipped = empRdd.zipWithIndex()
     empRdd = empRddZipped.filter(_._2 > 0).keys    // Elimino la prima riga (l'intestazione) dall'RDD
@@ -63,11 +63,10 @@ object test
     val empDF = empRdd.toDF()
     //empDF.show()
 
+
     var df2 = empDF.withColumn("year", empDF("year").cast("int"))
-    df2 = empDF.withColumn("co2", empDF("co2").cast("int"))
-    df2 = empDF.withColumn("pop", empDF("pop").cast("int"))
-    df2 = empDF.withColumn("temp", empDF("temp").cast("float"))
-    //df2.show(100)
+    df2 = empDF.withColumn("co2", empDF("co2").cast("float"))
+    df2 = empDF.withColumn("gdp", empDF("gdp").cast("float"))//df2.show(100)
     //df2.filter(df2("year") === "1960").show(true)
 
     var mapAnnoDF = Map[Int, DataFrame]()
