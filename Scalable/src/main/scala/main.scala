@@ -71,6 +71,38 @@ object test
 
     var mapAnnoDF = Map[Int, DataFrame]()
     for (anno <- 1959 to 2013) mapAnnoDF += (anno -> df2.filter(df2("year") === anno))
-    mapAnnoDF(2003).show()
+    //mapAnnoDF(2003).show()
+
+    val empRddProva = empRddZipped.filter(_._2 > 6).filter(_._2 < 16).keys // Creo un dataframe per le prove
+    val empDFProva = empRddProva.toDF()
+    empDFProva.show()
   }
+
+  def combine(in: List[Int]): IndexedSeq[List[Int]] =
+    for {
+      len <- 2 to 2
+      combinations <- in combinations len
+    } yield combinations
+
+  //println(combine(List(1, 2, 3, 4, 5)))
+
+      // [-1, -1, 2, 3, 4,   5]  indici
+      // [0, 1, 2, 3, 4, (0, 1)] dizionario
+      //3 5
+      // [-1, -1, 2, -1, 4, -1   ,  6  ]  indici
+      // [0, 1, 2, 3, 4, (0, 1),(3,5)]
+
+  var indici = List(1,2,3)
+  val coppia = (2,3)
+
+  indici = indici.updated(coppia._1 - 1, -1)  // List.updated(index, new_value)
+  indici = indici.updated(coppia._2 - 1, -1)
+
+      // [0, 1, 2, 3, 4,   5]  indici
+      // [0, 1, 2, 3, 4, (0, 1)] dizionario
+
+   /*   for(combinazione <- combine(List(1, 2, 3, 4, 5))){
+
+      } stavo iniziando il calcolo del punto medio */
+
 }
