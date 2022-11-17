@@ -1,6 +1,6 @@
 import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.{SparkConf, SparkContext}
-
+import math.pow
 import java.io._
 
 
@@ -42,6 +42,10 @@ object test
 {
   // Main Method
   case class Country(index: String, country: String, year: String, co2: String, gdp: String)
+  case class Point(x: Double, y: Double) {
+    def distance(other: Point): Double =
+      pow(x - other.x, 2) + pow(y - other.y, 2)
+  }
 
   def main(args: Array[String]): Unit = {
     var conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")
@@ -101,8 +105,18 @@ object test
       // [0, 1, 2, 3, 4,   5]  indici
       // [0, 1, 2, 3, 4, (0, 1)] dizionario
 
-   /*   for(combinazione <- combine(List(1, 2, 3, 4, 5))){
+     //for(combinazione <- combine(List(1, 2, 3, 4, 5))){
 
-      } stavo iniziando il calcolo del punto medio */
+       val pt1 = Point(1, 2)  //qui bisogna prendere le coordinate dal df e non ho capito come si fa
+       val pt2 = Point(3, 4)
+       val x = (pt1.x + pt2.x) / 2
+       val y = (pt1.y + pt2.y) / 2
+
+       val ptMedio = Point(x,y)
+       val dist= ptMedio.distance(pt1)
+       val dist1= pt1.distance(pt2)
+
+       println(dist,dist1)
+  //} stavo iniziando il calcolo dell'errore
 
 }
