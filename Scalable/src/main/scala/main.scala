@@ -80,7 +80,28 @@ object test
     val empRddProva = empRddZipped.filter(_._2 > 6).filter(_._2 < 16).keys // Creo un dataframe per le prove
     val empDFProva = empRddProva.toDF()
     empDFProva.show()
+    //lunghezza del dataframe per ottenere la lunghezza iniziale degli indici
+    //println(empDFProva.count()) 9
+
+    //creo gli indici iniziali da 0 a len(df)
+    val indici = List.range(0, empDFProva.count().toInt)
+    //println(indici) List(0, 1, 2, 3, 4, 5, 6, 7, 8)
+
+    val dizionario = indici
+
+    //creo tutte le combinazioni possibili degli indici
+    val combinazioni = combine(indici)
+
+    println(empDFProva.rdd.take(7).last(3) , empDFProva.rdd.take(7).last(4))
+
+    // METODO 1
+    combinazioni.foreach { println }
+    // METODO 2 (forse meglio per parallelizzare)
+    combinazioni.map(println(_))
   }
+
+
+
 
   def combine(in: List[Int]): IndexedSeq[List[Int]] =
     for {
@@ -107,16 +128,39 @@ object test
 
      //for(combinazione <- combine(List(1, 2, 3, 4, 5))){
 
+
+
+  def distance(dataFrame: DataFrame, points: List[Int], dizionario: List[List[Int]]): Double ={
+
+       val all_x : List[Int] = List()
+       val all_y : List[Int] = List()
+       val original = points
+
+      val n = points.length
+      for(i <- points){
+        all_x :+ dataFrame.rdd.take(i).last(3) //CO2
+        all_y :+ dataFrame.rdd.take(i).last(4) //GDP
+      }
+
+      val X = all_x.sum / points.length    // .sum = Sommatoria
+      val Y = all_y.sum / points.length
+
+
+
        val pt1 = Point(1, 2)  //qui bisogna prendere le coordinate dal df e non ho capito come si fa
        val pt2 = Point(3, 4)
        val x = (pt1.x + pt2.x) / 2
        val y = (pt1.y + pt2.y) / 2
 
        val ptMedio = Point(x,y)
-       val dist= ptMedio.distance(pt1)
+       //val dist= ptMedio.distance(pt1)
        val dist1= pt1.distance(pt2)
 
-       println(dist,dist1)
+       dist1
+       //println(dist,dist1)
+  }
+
+
   //} stavo iniziando il calcolo dell'errore
 
 }
