@@ -1,7 +1,11 @@
 import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.log4j.Level
+import org.apache.log4j.{Level, Logger}
+
 import math.pow
 import java.io._
+import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
 
 /*
@@ -43,9 +47,10 @@ object test
   // Main Method
   case class Country(index: String, country: String, year: String, co2: String, gdp: String)
   case class Point(x: Double, y: Double) {
-    def distance(other: Point): Double =
+    def error_square_fun(other: Point): Double =
       pow(x - other.x, 2) + pow(y - other.y, 2)
   }
+
 
   def main(args: Array[String]): Unit = {
     var conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")
@@ -80,26 +85,50 @@ object test
     val empRddProva = empRddZipped.filter(_._2 > 6).filter(_._2 < 16).keys // Creo un dataframe per le prove
     val empDFProva = empRddProva.toDF()
     empDFProva.show()
-    //lunghezza del dataframe per ottenere la lunghezza iniziale degli indici
-    //println(empDFProva.count()) 9
 
     //creo gli indici iniziali da 0 a len(df)
-    val indici = List.range(0, empDFProva.count().toInt)
+    var indici = List.range(1, empDFProva.count().toInt)
     //println(indici) List(0, 1, 2, 3, 4, 5, 6, 7, 8)
 
-    val dizionario = indici
+    var dizionario : List[Any] = indici
 
     //creo tutte le combinazioni possibili degli indici
     val combinazioni = combine(indici)
 
-    println(empDFProva.rdd.take(7).last(3) , empDFProva.rdd.take(7).last(4))
+    // println(empDFProva.rdd.take(1).last(3) , empDFProva.rdd.take(1).last(4))
+    val col_co2 = empDFProva.select("co2").map(_.getString(0)).collectAsList.map(_.toDouble).toList
+    val col_gdp = empDFProva.select("gdp").map(_.getString(0)).collectAsList.map(_.toDouble).toList
+    val xy_zip = col_co2 zip col_gdp
+    //println(xy_zip(3)._1)
+    //println(xy_zip(3)._2)
 
+
+    //var error_list : List[Double] = List()
     // METODO 1
-    combinazioni.foreach { println }
-    // METODO 2 (forse meglio per parallelizzare)
-    combinazioni.map(println(_))
-  }
+    //combinazioni.foreach {
+    //  error_list = error_list :+ distance(xy_zip,_,dizionario)
+    //}
 
+    //println(error_list)
+    // METODO 2 (forse meglio per parallelizzare)
+    val error_list = combinazioni.map(distance(xy_zip,_,dizionario))
+
+    println(combinazioni(error_list.indexOf(error_list.min)))
+    println(indici)
+
+    val coppia = combinazioni(error_list.indexOf(error_list.min))
+    indici = indici.updated(coppia(0)-1, -1) // List.updated(index, new_value)
+    indici = indici.updated(coppia(1)-1, -1)
+
+    indici = indici :+ indici.length+1
+    dizionario = dizionario :+ coppia
+
+    println(indici)
+    println(dizionario)
+
+
+
+  }
 
 
 
@@ -117,11 +146,13 @@ object test
       // [-1, -1, 2, -1, 4, -1   ,  6  ]  indici
       // [0, 1, 2, 3, 4, (0, 1),(3,5)]
 
-  var indici = List(1,2,3)
-  val coppia = (2,3)
+      /*
+      var indici = List(1,2,3)
+      val coppia = (2,3)
 
-  indici = indici.updated(coppia._1 - 1, -1)  // List.updated(index, new_value)
-  indici = indici.updated(coppia._2 - 1, -1)
+      indici = indici.updated(coppia._1 - 1, -1)  // List.updated(index, new_value)
+      indici = indici.updated(coppia._2 - 1, -1)
+       */
 
       // [0, 1, 2, 3, 4,   5]  indici
       // [0, 1, 2, 3, 4, (0, 1)] dizionario
@@ -130,23 +161,44 @@ object test
 
 
 
-  def distance(dataFrame: DataFrame, points: List[Int], dizionario: List[List[Int]]): Double ={
+  def distance(dataFrame: List[(Double,Double)], points: List[Int], dizionario: List[Any]): Double ={
+       //0 1 2 3 4   5     6   indici
+       //0 1 2 3 4 (0,1) (3,5) dizionario
+       //(0,1)  (0,2) ,.... (5,6) combinazioni
+       //(3,5)-> 3,(0,1) -> 3,0,1 flat
 
-       val all_x : List[Int] = List()
-       val all_y : List[Int] = List()
+       var all_x : List[Double] = List()
+       var all_y : List[Double] = List()
+       var X, Y : Double = 0
        val original = points
-
+      //println(points)
       val n = points.length
       for(i <- points){
-        all_x :+ dataFrame.rdd.take(i).last(3) //CO2
-        all_y :+ dataFrame.rdd.take(i).last(4) //GDP
+        all_x = all_x :+ dataFrame(i)._1 //CO2
+        all_y = all_y :+ dataFrame(i)._2 //GDP
+
+        X = X + dataFrame(i)._1
+        Y = Y + dataFrame(i)._2
+
       }
 
-      val X = all_x.sum / points.length    // .sum = Sommatoria
-      val Y = all_y.sum / points.length
+      X = X/points.length
+      Y = Y/points.length
+      var ptMedio = Point(X,Y)
+      var error_square=0.0
+      var point=Point(0.0,0.0)
+      for (i <- 0 to n-1) {
+        point = Point(all_x(i),all_y(i))
+        //println(point)
+        error_square = error_square + ptMedio.error_square_fun(point)
+        //println(error_square)
+      }
+      //println(error_square)
 
+      //println("-------------------------------")
+      error_square
 
-
+      /*
        val pt1 = Point(1, 2)  //qui bisogna prendere le coordinate dal df e non ho capito come si fa
        val pt2 = Point(3, 4)
        val x = (pt1.x + pt2.x) / 2
@@ -157,6 +209,7 @@ object test
        val dist1= pt1.distance(pt2)
 
        dist1
+    */
        //println(dist,dist1)
   }
 
