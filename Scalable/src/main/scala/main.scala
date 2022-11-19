@@ -45,6 +45,9 @@ object test
 
 object test
 {
+
+  var original_lenght = 0
+
   // Main Method
   case class Country(index: String, country: String, year: String, co2: String, gdp: String)
   case class Point(x: Double, y: Double) {
@@ -89,10 +92,11 @@ object test
     empDFProva.show()
 
     //creo gli indici iniziali da 0 a len(df)
-    var indici = List.range(0, empDFProva.count().toInt)
+    var indici : List[Int] = List.range(0, empDFProva.count().toInt)
     //println(indici) List(0, 1, 2, 3, 4, 5, 6, 7, 8)
-
-    var dizionario : List[Any] = indici
+    original_lenght=empDFProva.count().toInt
+    //var dizionario : List[Any] = indici
+    var dizionario : List[List[Int]] = indici.map(List(_))
 
     //creo tutte le combinazioni possibili degli indici
 
@@ -110,9 +114,9 @@ object test
     //  error_list = error_list :+ distance(xy_zip,_,dizionario)
     //}
 
-    //println(error_list)
+    println(dizionario)
     // METODO 2 (forse meglio per parallelizzare)
-    for( a <- 1 to 2) {
+    for( a <- 1 to original_lenght-1) {
       var combinazioni = indici.filter(_!=(-1)).combinations(2).toList
       //combinazioni = combinazioni.filter(element => element(0)!=(-1) && element(1)!=(-1))
       println("-----------------")
@@ -174,7 +178,7 @@ object test
 
 
 
-  def distance(dataFrame: List[(Double,Double)], points: List[Int], dizionario: List[Any]): Double ={
+  def distance(dataFrame: List[(Double,Double)], points: List[Int], dizionario: List[List[Int]]): Double ={
        //0 1 2 3 4   5     6   indici
        //0 1 2 3 4 (0,1) (3,5) dizionario
        //(0,1)  (0,2) ,.... (5,6) combinazioni
@@ -183,19 +187,23 @@ object test
        var all_x : List[Double] = List()
        var all_y : List[Double] = List()
        var X, Y : Double = 0
-       val original = points
+       var points_new= expand(points,dizionario)
+    println("expand ", expand(points,dizionario))
+    println("ooo",points_new)
+      val n = points_new.length
+      for(i <- points_new){
 
-      val n = points.length
-      for(i <- points){
+        //println(dataFrame(i)._1)
         all_x = all_x :+ dataFrame(i)._1 //CO2
         all_y = all_y :+ dataFrame(i)._2 //GDP
+
 
         X = X + dataFrame(i)._1
         Y = Y + dataFrame(i)._2
       }
 
-      X = X/points.length
-      Y = Y/points.length
+      X = X/points_new.length
+      Y = Y/points_new.length
       var ptMedio = Point(X,Y)
       var error_square=0.0
       var point=Point(0.0,0.0)
@@ -207,11 +215,55 @@ object test
       error_square
       }
 
+  def cast[A <: AnyRef : Manifest](a : Any) : A
+  = manifest[A].erasure.cast(a).asInstanceOf[A]
 
- /* def expand(points: List[Int], dizionario: List[Any], n:Int): List[Int] = {
-    var points_extend= List()
-    if (points.max<n)
-  }*/
+  def expand(points: List[Int], dizionario: List[List[Int]]): List[Int] = {
+    var points_extend : List[Int] = List()
+    //println("PUNTI EXTEND:  ", points," Original Lenght: ",original_lenght)
+    if (points.max<original_lenght){
+      points
+    }else{
+      for(i <- points){ //points= List(1,6)   i=1  i=6
+        //println(i)
+
+        //temp_list.isEmpty
+
+        if(dizionario(i).length > 1){
+
+          var temp_list: List[Int] = dizionario(i)
+          println(temp_list)
+          points_extend = points_extend:+ temp_list(0)
+          points_extend = points_extend:+ temp_list(1)
+          points_extend = expand(points_extend,dizionario)
+        }else{
+        points_extend = points_extend :+ i
+        }
+
+        /*
+        // VERSIONE ALTERNATIVA "alla maniera di Scala"
+        def aggiunta(i : Int) : List[Int] = dizionario(i) match {
+
+          case single_num : Int => points_extend = points_extend :+ single_num //point.extend.append(i)
+          case coppia : List[Int] => aggiunta(coppia(0))
+        }
+        */
+      }
+      println("FINALE ", points_extend)
+      points_extend
+    }
+  }
+  /*
+  // VERSIONE ALTERNATIVA "alla maniera di Scala" di expand
+  def expand1(l : List[Any])  = {
+    for (el <- l) {
+      el match {
+        case single_num : Int => points_extend = points_extend :+ single_num
+        case coppia : List[Int] => expand1(coppia)
+      }
+    }
+  }
+  */
 
     /*
      val pt1 = Point(1, 2)  //qui bisogna prendere le coordinate dal df e non ho capito come si fa
