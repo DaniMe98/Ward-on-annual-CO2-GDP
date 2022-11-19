@@ -6,6 +6,7 @@ import org.apache.log4j.{Level, Logger}
 import math.pow
 import java.io._
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
+import scala.collection.immutable.Nil.combinations
 
 
 /*
@@ -53,7 +54,8 @@ object test
 
 
   def main(args: Array[String]): Unit = {
-    var conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")
+
+   var conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")
     val sc = new SparkContext(conf)
     val sqlContext = new SQLContext(sc)
     import sqlContext.implicits._
@@ -87,13 +89,12 @@ object test
     empDFProva.show()
 
     //creo gli indici iniziali da 0 a len(df)
-    var indici = List.range(1, empDFProva.count().toInt)
+    var indici = List.range(0, empDFProva.count().toInt)
     //println(indici) List(0, 1, 2, 3, 4, 5, 6, 7, 8)
 
     var dizionario : List[Any] = indici
 
     //creo tutte le combinazioni possibili degli indici
-    val combinazioni = combine(indici)
 
     // println(empDFProva.rdd.take(1).last(3) , empDFProva.rdd.take(1).last(4))
     val col_co2 = empDFProva.select("co2").map(_.getString(0)).collectAsList.map(_.toDouble).toList
@@ -111,20 +112,28 @@ object test
 
     //println(error_list)
     // METODO 2 (forse meglio per parallelizzare)
-    val error_list = combinazioni.map(distance(xy_zip,_,dizionario))
+    for( a <- 1 to 2) {
+      var combinazioni = indici.filter(_!=(-1)).combinations(2).toList
+      //combinazioni = combinazioni.filter(element => element(0)!=(-1) && element(1)!=(-1))
+      println("-----------------")
+      println(combinazioni)
+      println("-----------------")
+      //mapping della lista di combinazioni con l'errore quadratico associato
+      val error_list = combinazioni.map(distance(xy_zip, _, dizionario))
 
-    println(combinazioni(error_list.indexOf(error_list.min)))
-    println(indici)
+      println(combinazioni(error_list.indexOf(error_list.min)))
+      println(indici)
+      // Combinazione con l'errore minimo minore
+      val coppia = combinazioni(error_list.indexOf(error_list.min))
+      indici = indici.updated(coppia(0), -1) // List.updated(index, new_value)
+      indici = indici.updated(coppia(1), -1)
 
-    val coppia = combinazioni(error_list.indexOf(error_list.min))
-    indici = indici.updated(coppia(0)-1, -1) // List.updated(index, new_value)
-    indici = indici.updated(coppia(1)-1, -1)
+      indici = indici :+ indici.length
+      dizionario = dizionario :+ coppia
 
-    indici = indici :+ indici.length+1
-    dizionario = dizionario :+ coppia
-
-    println(indici)
-    println(dizionario)
+      println(indici)
+      println(dizionario)
+    }
 
 
 
@@ -138,6 +147,10 @@ object test
       combinations <- in combinations len
     } yield combinations
 
+  //comb.map(_.filter(_._2!= 1))
+
+
+  //comb.filter(element => element(0)!=1 || element(1)!=1)
   //println(combine(List(1, 2, 3, 4, 5)))
 
       // [-1, -1, 2, 3, 4,   5]  indici
@@ -171,7 +184,7 @@ object test
        var all_y : List[Double] = List()
        var X, Y : Double = 0
        val original = points
-      //println(points)
+
       val n = points.length
       for(i <- points){
         all_x = all_x :+ dataFrame(i)._1 //CO2
@@ -179,7 +192,6 @@ object test
 
         X = X + dataFrame(i)._1
         Y = Y + dataFrame(i)._2
-
       }
 
       X = X/points.length
@@ -189,29 +201,32 @@ object test
       var point=Point(0.0,0.0)
       for (i <- 0 to n-1) {
         point = Point(all_x(i),all_y(i))
-        //println(point)
         error_square = error_square + ptMedio.error_square_fun(point)
-        //println(error_square)
+
       }
-      //println(error_square)
-
-      //println("-------------------------------")
       error_square
+      }
 
-      /*
-       val pt1 = Point(1, 2)  //qui bisogna prendere le coordinate dal df e non ho capito come si fa
-       val pt2 = Point(3, 4)
-       val x = (pt1.x + pt2.x) / 2
-       val y = (pt1.y + pt2.y) / 2
 
-       val ptMedio = Point(x,y)
-       //val dist= ptMedio.distance(pt1)
-       val dist1= pt1.distance(pt2)
+ /* def expand(points: List[Int], dizionario: List[Any], n:Int): List[Int] = {
+    var points_extend= List()
+    if (points.max<n)
+  }*/
 
-       dist1
-    */
+    /*
+     val pt1 = Point(1, 2)  //qui bisogna prendere le coordinate dal df e non ho capito come si fa
+     val pt2 = Point(3, 4)
+     val x = (pt1.x + pt2.x) / 2
+     val y = (pt1.y + pt2.y) / 2
+
+     val ptMedio = Point(x,y)
+     //val dist= ptMedio.distance(pt1)
+     val dist1= pt1.distance(pt2)
+
+     dist1
+  */
        //println(dist,dist1)
-  }
+
 
 
   //} stavo iniziando il calcolo dell'errore
