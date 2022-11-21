@@ -14,5 +14,6 @@ val sparkVersion = "3.3.1" //"1.6.1"
 libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-core" % sparkVersion,
   "org.apache.spark" %% "spark-streaming" % sparkVersion,
-  "org.apache.spark" %% "spark-sql" % sparkVersion
+  "org.apache.spark" %% "spark-sql" % sparkVersion,
+  "org.plotly-scala" %% "plotly-render" %  "0.8.3"
 )

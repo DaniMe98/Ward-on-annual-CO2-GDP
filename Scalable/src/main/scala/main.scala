@@ -4,6 +4,7 @@ import org.apache.log4j.Level
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.functions.{lit, typedLit}
 
+import plotly._, element._, layout._, Plotly._
 import math.pow
 import java.io._
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
@@ -172,47 +173,47 @@ object test
     var merged_df = empDFProva.join(label_indexed, empDFProva("index") === label_indexed("id"))
     merged_df = merged_df.drop("index").drop("country").drop("year").drop("id")
     merged_df.show(100)
-    //merged_df.write.csv(".")
-    //merged_df.write.format("csv").save("/tmp/spark_output/datacsv")
-    //------merged_df.write.format("com.databricks.spark.csv").save("myFile.csv")
-    // val merged_df = empDFProva.unionByName(label_DF, true)
 
-    /*merged_df.coalesce(1)
-      .write.format("com.databricks.spark.csv")
-      .option("header", "true")
-      .save("mydata.csv")
+    //!!!IMPORTANTE!!! merged_df.coalesce(1).write.option("header", "true").csv("output_csv")
 
-    merged_df.repartition(1)
-      .write.format("com.databricks.spark.csv")
-      .option("header", "true")
-      .save("mydata2.csv")*/
 
-    merged_df.coalesce(1).write.csv("output_csv")
+    val x = (0 to 100).map(_ * 0.1)
+    val y1 = x.map(d => 2.0 * d + util.Random.nextGaussian())
+    val y2 = x.map(math.exp)
 
-/*
-    var i=0
-    def customColumnVal( label_column: List[Int]):{
-      var rd = label_column.asDict()
-      rd["Label"]=label_column(i)
-      i = i+1
-      new_row=Row(**rd)
-      return new_row
-      }
-
-    //convert DF to RDD
-      df_rdd = df2.rdd
-
-    //apply new fucntion to rdd
-    output_dataframe=df_rdd.map(customColumnVal).toDF()
-
-*/
-
+    val plot = Seq(
+      Scatter(x, y1).withName("Approx twice"),
+      Scatter(x, y2).withName("Exp")
+    )
+    val lay = Layout().withTitle("Curves")
+    plot.plot("plot", lay)
 
   }
+
+    /*
+        var i=0
+        def customColumnVal( label_column: List[Int]):{
+          var rd = label_column.asDict()
+          rd["Label"]=label_column(i)
+          i = i+1
+          new_row=Row(**rd)
+          return new_row
+          }
+
+        //convert DF to RDD
+          df_rdd = df2.rdd
+
+        //apply new fucntion to rdd
+        output_dataframe=df_rdd.map(customColumnVal).toDF()
+
+    */
+
+
     /*
     val df = empDFProva.withColumn("Label",lit("newValue"))//empDFProva.withColumn("Label", empDFProva("gdp") + 1) // -- OK
     df.show()
     */
+
 
 
 
