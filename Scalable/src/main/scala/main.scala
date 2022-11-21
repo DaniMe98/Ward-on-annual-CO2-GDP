@@ -8,7 +8,7 @@ import math.pow
 import java.io._
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 import scala.collection.immutable.Nil.combinations
-
+import org.apache.spark.sql.functions._
 object test
 {
 
@@ -53,8 +53,10 @@ object test
     for (anno <- 1959 to 2013) mapAnnoDF += (anno -> df2.filter(df2("year") === anno))
     //mapAnnoDF(2003).show()
 
-    val empRddProva = empRddZipped.filter(_._2 > 0).filter(_._2 < 20).keys // Creo un dataframe per le prove
-    val empDFProva = empRddProva.toDF()
+    val empRddProva = empRddZipped.filter(_._2 > 10).filter(_._2 < 50).keys // Creo un dataframe per le prove
+    var empDFProva = empRddProva.toDF()
+
+    empDFProva = empDFProva.withColumn("index", monotonicallyIncreasingId)
     empDFProva.show()
     println(empDFProva)
     //creo gli indici iniziali da 0 a len(df)
@@ -163,36 +165,47 @@ object test
     val cluster_zipped : List[List[(Int, Int)]] = cluster_expanded.zipWithIndex.map(x => x._1.zip(List.fill[Int](x._1.length)(x._2)))
     val cluster_flat : List[(Int, Int)] = cluster_zipped.flatten.sortBy(_._1)
     val label : List[Int] = cluster_flat.map(_._2)
-    val label_DF = label.toDF()
-    label_DF.show()
-    val label_column = label_DF("value")
-    println("DANIELE================", label_column)
+    var label_indexed : DataFrame = label.zipWithIndex.toDF()
+    label_indexed = label_indexed.withColumnRenamed("_1", "label").withColumnRenamed("_2", "id")
+    label_indexed.show(100)
 
-    //label_DF.withColumn("num", List.range(1, original_lenght))
+    var merged_df = empDFProva.join(label_indexed, empDFProva("index") === label_indexed("id"))
+    merged_df = merged_df.drop("index").drop("country").drop("year").drop("id")
+    merged_df.show(100)
+    //merged_df.write.csv(".")
+    //merged_df.write.format("csv").save("/tmp/spark_output/datacsv")
+    //------merged_df.write.format("com.databricks.spark.csv").save("myFile.csv")
+    // val merged_df = empDFProva.unionByName(label_DF, true)
 
-    //val df = empDFProva.withColumn("value", label_column.cast("int")) //empDFProva.withColumn("Label", empDFProva("gdp") + 1) // -- OK
-   // val df2 = empDFProva.withColumn("value", typedLit(label.foreach {_})) }
+    /*merged_df.coalesce(1)
+      .write.format("com.databricks.spark.csv")
+      .option("header", "true")
+      .save("mydata.csv")
 
+    merged_df.repartition(1)
+      .write.format("com.databricks.spark.csv")
+      .option("header", "true")
+      .save("mydata2.csv")*/
 
+    merged_df.coalesce(1).write.csv("output_csv")
 
-
-
-   /* var i=0
+/*
+    var i=0
     def customColumnVal( label_column: List[Int]):{
       var rd = label_column.asDict()
       rd["Label"]=label_column(i)
       i = i+1
       new_row=Row(**rd)
       return new_row
-}
+      }
 
     //convert DF to RDD
-      df_rdd = input_dataframe.rdd
+      df_rdd = df2.rdd
 
     //apply new fucntion to rdd
     output_dataframe=df_rdd.map(customColumnVal).toDF()
-      */
 
+*/
 
 
   }
