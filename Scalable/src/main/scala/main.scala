@@ -3,8 +3,12 @@ import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.log4j.Level
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.functions.{lit, typedLit}
+import plotly._
+import element._
+import layout._
+import Plotly._
+import org.apache.hadoop.shaded.org.jline.keymap.KeyMap.display
 
-import plotly._, element._, layout._, Plotly._
 import math.pow
 import java.io._
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
@@ -19,7 +23,7 @@ object test
   case class Country(index: String, country: String, year: String, co2: String, gdp: String)
   case class Point(x: Double, y: Double) {
     def error_square_fun(other: Point): Double =
-      pow(x - other.x, 2) + pow(y - other.y, 2)
+      pow(other.x - x, 2) + pow(other.y - y, 2)
   }
 
 
@@ -46,20 +50,25 @@ object test
 
 
     var df2 = empDF.withColumn("year", empDF("year").cast("int"))
-    df2 = empDF.withColumn("co2", empDF("co2").cast("float"))
-    df2 = empDF.withColumn("gdp", empDF("gdp").cast("float"))//df2.show(100)
+    df2 = empDF.withColumn("co2", empDF("co2").cast("double"))
+    df2 = empDF.withColumn("gdp", empDF("gdp").cast("double"))//df2.show(100)
     //df2.filter(df2("year") === "1960").show(true)
 
     var mapAnnoDF = Map[Int, DataFrame]()
     for (anno <- 1959 to 2013) mapAnnoDF += (anno -> df2.filter(df2("year") === anno))
-    //mapAnnoDF(2003).show()
+    mapAnnoDF(2003).toDF().show()
 
-    val empRddProva = empRddZipped.filter(_._2 > 10).filter(_._2 < 50).keys // Creo un dataframe per le prove
+    val empRddProva = empRddZipped.filter(_._2 > 10).filter(_._2 < 60).keys // Creo un dataframe per le prove
     var empDFProva = empRddProva.toDF()
 
+    empDFProva = mapAnnoDF(2003).toDF()
     empDFProva = empDFProva.withColumn("index", monotonicallyIncreasingId)
     empDFProva.show()
-    println(empDFProva)
+
+    println("AAAAAAAAAAAAAAAAAAAAAAAA"+empRddZipped.keys.toDF())
+    empRddZipped.filter(_._2 >0 ).keys.toDF().show()
+
+    println("kakakakakkakakkakaka")
     //creo gli indici iniziali da 0 a len(df)
     var indici : List[Int] = List.range(0, empDFProva.count().toInt)
     //println(indici) List(0, 1, 2, 3, 4, 5, 6, 7, 8)
@@ -71,8 +80,7 @@ object test
 
     // println(empDFProva.rdd.take(1).last(3) , empDFProva.rdd.take(1).last(4))
     val col_co2 = empDFProva.select("co2").map(_.getString(0)).collectAsList.map(_.toDouble).toList
-    val col_gdp = empDFProva.select("gdp").map(_.getString(0)).collectAsList.map(_.toDouble).toList
-
+    val col_gdp = empDFProva.select("gdp").map(_.getDouble(0)).collectAsList.toList
     val xy_zip = col_co2 zip col_gdp
 
     println(xy_zip)
@@ -177,16 +185,30 @@ object test
     //!!!IMPORTANTE!!! merged_df.coalesce(1).write.option("header", "true").csv("output_csv")
 
 
-    val x = (0 to 100).map(_ * 0.1)
-    val y1 = x.map(d => 2.0 * d + util.Random.nextGaussian())
-    val y2 = x.map(math.exp)
+///////////////////////////////////////////777
+    var data: List[Trace] = List()
 
-    val plot = Seq(
-      Scatter(x, y1).withName("Approx twice"),
-      Scatter(x, y2).withName("Exp")
+    for(i <- 0 to cluster.length-1) {
+      var extractor = expand(List(cluster(i)),dizionario)
+
+      //extractor.foreach(x => col_gdp(x))
+      val trace = Scatter(
+        extractor.map(col_co2(_)),  //List(1, 2, 3, 4),
+        extractor.map(col_gdp(_)),  //List(10, 15, 13, 17),
+        mode = ScatterMode(ScatterMode.Markers)
+      )
+
+
+      data = data :+ trace
+    }
+    val layout = Layout(
+      title = "Ward Plot on CO2/GDP"
     )
-    val lay = Layout().withTitle("Curves")
-    plot.plot("plot", lay)
+
+    Plotly.plot("ward_plot.html", data, layout)
+/////////////////////////////////////
+
+
 
   }
 
