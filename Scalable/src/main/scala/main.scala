@@ -14,6 +14,9 @@ import java.io._
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 import scala.collection.immutable.Nil.combinations
 import org.apache.spark.sql.functions._
+
+
+
 object test
 {
 
@@ -117,6 +120,112 @@ object test
   }
   /////////////////////////////////////
 
+  def ward(empDFProva2: DataFrame, sc : SparkContext): Int = {
+
+    val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+    import sqlContext.implicits._
+
+    var empDFProva = empDFProva2.withColumn("index", monotonicallyIncreasingId)
+    empDFProva.show()
+    // forest = List(0, 1, 2, 3, 4, 5, 6, 7, 8 ... len(df)
+    var forest: List[Int] = List.range (0, empDFProva.count().toInt)
+
+    original_lenght = empDFProva.count().toInt
+
+    // dizionario in cui sono salvate le combinazioni dei cluster
+    var dizionario: List[List[Int]] = forest.map(List(_))
+
+    // lista contenente i valori di co2
+    val col_co2 : List[Double] = empDFProva.select("co2").map(_.getString(0)).collectAsList.map(_.toDouble).toList
+    // lista contenente i valori di gdp
+    val col_gdp = empDFProva.select("gdp").map(_.getDouble(0)).collectAsList.toList
+    // zip di co2 e gdp
+    val xy_zip = col_co2 zip col_gdp
+
+    println (xy_zip)
+    println (dizionario)
+
+    // APPLICAZIONE WARD
+    for (counter <- 1 to original_lenght - 1) {
+    // Creazione delle combinazioni con i valori del forest disponibili(!= -1)
+    var combinazioni = forest.filter(_ != (- 1)).combinations(2).toList
+
+    //mapping della lista di combinazioni con l'errore quadratico associato
+    val error_list = combinazioni.map(distance(xy_zip, _, dizionario))
+
+    // Combinazione con l'errore minimo minore
+    val coppia = combinazioni(error_list.indexOf(error_list.min))
+
+    // Aggiornamento dei forest, eliminiamo i cluster appena uniti dal forest
+    forest = forest.updated (coppia (0), - 1) // List.updated(index, new_value)
+    forest = forest.updated (coppia (1), - 1)
+    // Creo un nuovo slot nei forest
+    forest = forest :+ forest.length
+    // Aggiungo la combinazione trovata corrispondente al nuovo slot del forest
+    dizionario = dizionario :+ coppia
+  }
+
+    //println(dizionario)
+    //println("ULTIMO CLUSTER: "+ dizionario.last)
+
+    // NUMERO DI CLUSTER = TAGLIO DEL DENDOGRAMMA
+    /*
+  for (i <- dizionario.last(0) to dizionario.length - 1) {
+    println("CLUSTER "+ i + " -> " + dizionario(i))
+  }
+  */
+    // NUMERO DI CLUSTER = TAGLIO DEL DENDOGRAMMA
+    var cluster: List[Int] = List ()
+    //scorro tutti i valori presenti nel dizionario della root(ultimo cluster creato)
+    for (i <- dizionario.last (0) to dizionario.length - 1) {
+    //println("---------------------------------------")
+    //println("CLUSTER NUMERO ->" + i)
+    //println("CLUSTER ->" + dizionario(i))
+
+    //Salvo nel primo cluster direttamente il valore del ramo più lungo del dendogramma
+    if (i == dizionario.last (0) ) {
+    cluster = cluster :+ i
+  } else {
+    //Controllo che i cluster analizzati siano più piccoli del valore del ramo più lungo del dendogramma
+    if (dizionario (i) (0) < dizionario.last (0) ) {
+    cluster = cluster :+ dizionario (i) (0)
+  }
+    if (dizionario (i) (1) < dizionario.last (0) ) {
+    cluster = cluster :+ dizionario (i) (1)
+  }
+  }
+  }
+    //println(cluster)
+    println ("NUMERO DI CLUSTER: " + cluster.length)
+    //Cluster: List(14, 6, 12)
+    // Expand(14) -> 0, 4, 5, 1, 2, 3 -----> LABEL 1
+    // Expand(6) ->  6                -----> LABEL 2
+    // Expand(12) -> 7, 8             -----> LABEL 3
+
+    // UNIONE DEI CLUSTER LABEL AL DATAFRAME INIZIALE
+    // Le radici dei cluster vengono espanse nei punti contenuti nel cluster
+    val cluster_expanded: List[List[Int]] = cluster.map (x => expand (List (x), dizionario) )
+    // I punti dei cluster vengono associati con la label del cluster corrispondente
+    val cluster_zipped: List[List[(Int, Int)]] = cluster_expanded.zipWithIndex.map (x => x._1.zip (List.fill[Int] (x._1.length) (x._2) ) )
+    // Le liste con i punti dei vari cluster vengono concatenate in un'unica lista e ordinate secondo l'ordine dei punti nel dataframe
+    val cluster_flat: List[(Int, Int)] = cluster_zipped.flatten.sortBy (_._1)
+    // Tengo soltanto le label associate ai punti (ordinate secondo l'ordinamento dei punti)
+    val label: List[Int] = cluster_flat.map (_._2)
+    // Aggiungo indici alle label per poter fare il join con il dataframe dei punti
+    var label_indexed: DataFrame = label.zipWithIndex.toDF()
+    label_indexed = label_indexed.withColumnRenamed ("_1", "label").withColumnRenamed ("_2", "id")
+    // Aggiungo al dataframe dei punti una colonna con le label del cluster corrispondente
+    var merged_df = empDFProva.join (label_indexed, empDFProva ("index") === label_indexed ("id") )
+    merged_df = merged_df.drop ("index").drop ("country").drop ("year").drop ("id")
+    //merged_df.show(100)
+
+    // Salvo i dati del dataframe finale (co2 e gdp dei punti con label del cluster relativo)
+    //merged_df.coalesce(1).write.option("header", "true").csv("output_csv")
+    // Creazione del grafico
+    graph (cluster, dizionario, col_co2, col_gdp)
+    return 0
+  }
+////////////////////////////////////////
   def main(args: Array[String]): Unit = {
 
    var conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")
@@ -143,109 +252,15 @@ object test
     //df2.filter(df2("year") === "1960").show(true)
 
     var mapAnnoDF = Map[Int, DataFrame]()
-    for (anno <- 1959 to 2013) mapAnnoDF += (anno -> df2.filter(df2("year") === anno))
-    mapAnnoDF(2003).toDF().show()
-
+    for (anno <- 1990 to 2013) mapAnnoDF += (anno -> df2.filter(df2("year") === anno))
+    //mapAnnoDF(2003).toDF().show()
+    ////////
+    val anni : List[Int] = List.range(1990, 2014)   // dal 1959 al 2013
+    val df_annuali : List[DataFrame] = anni.map(mapAnnoDF(_).toDF())
+    println(anni.map(mapAnnoDF(_).toDF()))
+    df_annuali.map(ward(_, sc))
+    //df_annuali.map(_.show())
+    // inizio funzione ward(empDFProva)
     var empDFProva = mapAnnoDF(2003).toDF()
-    empDFProva = empDFProva.withColumn("index", monotonicallyIncreasingId)
-    empDFProva.show()
-
-    //creo gli forest iniziali da 0 a len(df)
-    // forest = List(0, 1, 2, 3, 4, 5, 6, 7, 8 ... len(df)
-    var forest : List[Int] = List.range(0, empDFProva.count().toInt)
-
-    original_lenght=empDFProva.count().toInt
-
-    // dizionario in cui sono salvate le combinazioni dei cluster
-    var dizionario : List[List[Int]] = forest.map(List(_))
-
-    // lista contenente i valori di co2
-    val col_co2 = empDFProva.select("co2").map(_.getString(0)).collectAsList.map(_.toDouble).toList
-    // lista contenente i valori di gdp
-    val col_gdp = empDFProva.select("gdp").map(_.getDouble(0)).collectAsList.toList
-    // zip di co2 e gdp
-    val xy_zip = col_co2 zip col_gdp
-
-    println(xy_zip)
-    println(dizionario)
-
-    // APPLICAZIONE WARD
-    for( counter <- 1 to original_lenght-1) {
-      // Creazione delle combinazioni con i valori del forest disponibili(!= -1)
-      var combinazioni = forest.filter(_!=(-1)).combinations(2).toList
-
-      //mapping della lista di combinazioni con l'errore quadratico associato
-      val error_list = combinazioni.map(distance(xy_zip, _, dizionario))
-
-      // Combinazione con l'errore minimo minore
-      val coppia = combinazioni(error_list.indexOf(error_list.min))
-
-      // Aggiornamento dei forest, eliminiamo i cluster appena uniti dal forest
-      forest = forest.updated(coppia(0), -1) // List.updated(index, new_value)
-      forest = forest.updated(coppia(1), -1)
-      // Creo un nuovo slot nei forest
-      forest = forest :+ forest.length
-      // Aggiungo la combinazione trovata corrispondente al nuovo slot del forest
-      dizionario = dizionario :+ coppia
-    }
-
-    //println(dizionario)
-    //println("ULTIMO CLUSTER: "+ dizionario.last)
-
-    // NUMERO DI CLUSTER = TAGLIO DEL DENDOGRAMMA
-    /*
-    for (i <- dizionario.last(0) to dizionario.length - 1) {
-      println("CLUSTER "+ i + " -> " + dizionario(i))
-    }
-    */
-    // NUMERO DI CLUSTER = TAGLIO DEL DENDOGRAMMA
-    var cluster: List[Int] = List()
-    //scorro tutti i valori presenti nel dizionario della root(ultimo cluster creato)
-    for(i <- dizionario.last(0) to dizionario.length-1) {
-      //println("---------------------------------------")
-      //println("CLUSTER NUMERO ->" + i)
-      //println("CLUSTER ->" + dizionario(i))
-
-      //Salvo nel primo cluster direttamente il valore del ramo più lungo del dendogramma
-      if(i == dizionario.last(0)){
-        cluster = cluster :+ i
-      }else {
-        //Controllo che i cluster analizzati siano più piccoli del valore del ramo più lungo del dendogramma
-        if (dizionario(i)(0) < dizionario.last(0)) {
-          cluster = cluster :+ dizionario(i)(0)
-        }
-        if (dizionario(i)(1) < dizionario.last(0)) {
-          cluster = cluster :+ dizionario(i)(1)
-        }
-      }
-    }
-    //println(cluster)
-    println("NUMERO DI CLUSTER: "+ cluster.length)
-    //Cluster: List(14, 6, 12)
-    // Expand(14) -> 0, 4, 5, 1, 2, 3 -----> LABEL 1
-    // Expand(6) ->  6                -----> LABEL 2
-    // Expand(12) -> 7, 8             -----> LABEL 3
-
-    // UNIONE DEI CLUSTER LABEL AL DATAFRAME INIZIALE 
-    // Le radici dei cluster vengono espanse nei punti contenuti nel cluster
-    val cluster_expanded : List[List[Int]] = cluster.map(x => expand(List(x), dizionario))
-    // I punti dei cluster vengono associati con la label del cluster corrispondente
-    val cluster_zipped : List[List[(Int, Int)]] = cluster_expanded.zipWithIndex.map(x => x._1.zip(List.fill[Int](x._1.length)(x._2)))
-    // Le liste con i punti dei vari cluster vengono concatenate in un'unica lista e ordinate secondo l'ordine dei punti nel dataframe
-    val cluster_flat : List[(Int, Int)] = cluster_zipped.flatten.sortBy(_._1)
-    // Tengo soltanto le label associate ai punti (ordinate secondo l'ordinamento dei punti)
-    val label : List[Int] = cluster_flat.map(_._2)
-    // Aggiungo indici alle label per poter fare il join con il dataframe dei punti
-    var label_indexed : DataFrame = label.zipWithIndex.toDF()
-    label_indexed = label_indexed.withColumnRenamed("_1", "label").withColumnRenamed("_2", "id")
-    // Aggiungo al dataframe dei punti una colonna con le label del cluster corrispondente
-    var merged_df = empDFProva.join(label_indexed, empDFProva("index") === label_indexed("id"))
-    merged_df = merged_df.drop("index").drop("country").drop("year").drop("id")
-    //merged_df.show(100)
-
-    // Salvo i dati del dataframe finale (co2 e gdp dei punti con label del cluster relativo)
-    //merged_df.coalesce(1).write.option("header", "true").csv("output_csv")
-    // Creazione del grafico
-    graph(cluster, dizionario, col_co2, col_gdp)
   }
 }
