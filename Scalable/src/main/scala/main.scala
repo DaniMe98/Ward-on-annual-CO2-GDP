@@ -1,5 +1,5 @@
 import org.apache.spark.sql.{DataFrame, SQLContext}
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.{SparkConf, SparkContext, scheduler}
 import org.apache.log4j.Level
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.functions.{lit, typedLit}
@@ -8,13 +8,14 @@ import element._
 import layout._
 import Plotly._
 import org.apache.hadoop.shaded.org.jline.keymap.KeyMap.display
-
 import math.pow
 import java.io._
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 import scala.collection.immutable.Nil.combinations
 import org.apache.spark.sql.functions._
 
+import java.util.concurrent._
+import scala.util.DynamicVariable
 
 
 object test
@@ -29,6 +30,20 @@ object test
       pow(other.x - x, 2) + pow(other.y - y, 2)
   }
 
+
+  def time[R](block: => R): R = {
+    val t0 = System.nanoTime()
+    val result = block // call-by-name
+    val t1 = System.nanoTime()
+    println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
+    result
+  }
+/*
+  val scheduler = new DynamicVariable[TaskScheduler](new DefaultTaskScheduler)
+  def parallel[A, B](taskA: => A, taskB: => B): (A, B) = {
+    scheduler.value.parallel(taskA, taskB)
+  }
+*/
   def distance(dataFrame: List[(Double, Double)], points: List[Int], dizionario: List[List[Int]]): Double = {
     //0 1 2 3 4   5     6   forest
     //0 1 2 3 4 (0,1) (3,5) dizionario
@@ -99,13 +114,11 @@ object test
 
 
   ///////////////////////////////////////////777
-  def graph(cluster: List[Int], dizionario: List[List[Int]], col_co2: List[Double], col_gdp: List[Double]): File = {
+  def graph(cluster: List[Int], dizionario: List[List[Int]], col_co2: List[Double], col_gdp: List[Double], year: String): File = {
     var data: List[Trace] = List()
 
     for (i <- 0 to cluster.length - 1) {
       var extractor = expand(List(cluster(i)), dizionario)
-
-      //extractor.foreach(x => col_gdp(x))
       val trace = Scatter(
         extractor.map(col_co2(_)), //List(1, 2, 3, 4),
         extractor.map(col_gdp(_)), //List(10, 15, 13, 17),
@@ -113,10 +126,15 @@ object test
       )
       data = data :+ trace
     }
+    val x = Layout(
+      title = "x",
+    )
+
     val layout = Layout(
       title = "Ward Plot on CO2/GDP"
-    )
-    Plotly.plot("ward_plot.html", data, layout)
+    )//.withXaxis(xAxisOptions)
+
+    Plotly.plot("ward_"+year+".html", data, layout)
   }
   /////////////////////////////////////
 
@@ -128,8 +146,11 @@ object test
     var empDFProva = empDFProva2.withColumn("index", monotonicallyIncreasingId)
     empDFProva.show()
     // forest = List(0, 1, 2, 3, 4, 5, 6, 7, 8 ... len(df)
-    var forest: List[Int] = List.range (0, empDFProva.count().toInt)
-
+    var forest: List[Int] = List()
+    forest = List.range(0, empDFProva.count().toInt)
+    println("----------------------------------------------------")
+    var year = empDFProva.select(col("year")).first.getString(0)
+    println("----------------------------------------------------")
     original_lenght = empDFProva.count().toInt
 
     // dizionario in cui sono salvate le combinazioni dei cluster
@@ -165,68 +186,75 @@ object test
     dizionario = dizionario :+ coppia
   }
 
-    //println(dizionario)
-    //println("ULTIMO CLUSTER: "+ dizionario.last)
+    // Creazione del grafico
+    var cluster = number_cluster(dizionario)
+    //csv (cluster, empDFProva, dizionario, sc)
+    graph (cluster, dizionario, col_co2, col_gdp, year)
+    return 0
+  }
+
+  def number_cluster(dizionario: List[List[Int]]): List[Int] = {
 
     // NUMERO DI CLUSTER = TAGLIO DEL DENDOGRAMMA
-    /*
-  for (i <- dizionario.last(0) to dizionario.length - 1) {
-    println("CLUSTER "+ i + " -> " + dizionario(i))
-  }
-  */
-    // NUMERO DI CLUSTER = TAGLIO DEL DENDOGRAMMA
-    var cluster: List[Int] = List ()
+    var cluster: List[Int] = List()
     //scorro tutti i valori presenti nel dizionario della root(ultimo cluster creato)
-    for (i <- dizionario.last (0) to dizionario.length - 1) {
-    //println("---------------------------------------")
-    //println("CLUSTER NUMERO ->" + i)
-    //println("CLUSTER ->" + dizionario(i))
+    for (i <- dizionario.last(0) to dizionario.length - 1) {
+      //println("---------------------------------------")
+      //println("CLUSTER NUMERO ->" + i)
+      //println("CLUSTER ->" + dizionario(i))
 
-    //Salvo nel primo cluster direttamente il valore del ramo più lungo del dendogramma
-    if (i == dizionario.last (0) ) {
-    cluster = cluster :+ i
-  } else {
-    //Controllo che i cluster analizzati siano più piccoli del valore del ramo più lungo del dendogramma
-    if (dizionario (i) (0) < dizionario.last (0) ) {
-    cluster = cluster :+ dizionario (i) (0)
+      //Salvo nel primo cluster direttamente il valore del ramo più lungo del dendogramma
+      if (i == dizionario.last(0)) {
+        cluster = cluster :+ i
+      } else {
+        //Controllo che i cluster analizzati siano più piccoli del valore del ramo più lungo del dendogramma
+        if (dizionario(i)(0) < dizionario.last(0)) {
+          cluster = cluster :+ dizionario(i)(0)
+        }
+        if (dizionario(i)(1) < dizionario.last(0)) {
+          cluster = cluster :+ dizionario(i)(1)
+        }
+      }
+    }
+    println("NUMERO DI CLUSTER: " + cluster.length)
+    return cluster
   }
-    if (dizionario (i) (1) < dizionario.last (0) ) {
-    cluster = cluster :+ dizionario (i) (1)
-  }
-  }
-  }
-    //println(cluster)
-    println ("NUMERO DI CLUSTER: " + cluster.length)
-    //Cluster: List(14, 6, 12)
-    // Expand(14) -> 0, 4, 5, 1, 2, 3 -----> LABEL 1
-    // Expand(6) ->  6                -----> LABEL 2
-    // Expand(12) -> 7, 8             -----> LABEL 3
+
+  /////////////////////////////////////////////////////////////////
+  /*
+  def csv (cluster: List[Int], empDFProva: DataFrame, dizionario: List[List[Int]], sc: SparkContext ): Unit = {
+    import sqlContext.implicits._
+    val sqlContext = new org.apache.spark.sql.SQLContext(sc)
 
     // UNIONE DEI CLUSTER LABEL AL DATAFRAME INIZIALE
     // Le radici dei cluster vengono espanse nei punti contenuti nel cluster
-    val cluster_expanded: List[List[Int]] = cluster.map (x => expand (List (x), dizionario) )
+    val cluster_expanded: List[List[Int]] = cluster.map(x => expand(List(x), dizionario))
     // I punti dei cluster vengono associati con la label del cluster corrispondente
-    val cluster_zipped: List[List[(Int, Int)]] = cluster_expanded.zipWithIndex.map (x => x._1.zip (List.fill[Int] (x._1.length) (x._2) ) )
+    val cluster_zipped: List[List[(Int, Int)]] = cluster_expanded.zipWithIndex.map(x => x._1.zip(List.fill[Int](x._1.length)(x._2)))
     // Le liste con i punti dei vari cluster vengono concatenate in un'unica lista e ordinate secondo l'ordine dei punti nel dataframe
-    val cluster_flat: List[(Int, Int)] = cluster_zipped.flatten.sortBy (_._1)
+    val cluster_flat: List[(Int, Int)] = cluster_zipped.flatten.sortBy(_._1)
     // Tengo soltanto le label associate ai punti (ordinate secondo l'ordinamento dei punti)
-    val label: List[Int] = cluster_flat.map (_._2)
+    val label: List[Int] = cluster_flat.map(_._2)
     // Aggiungo indici alle label per poter fare il join con il dataframe dei punti
     var label_indexed: DataFrame = label.zipWithIndex.toDF()
-    label_indexed = label_indexed.withColumnRenamed ("_1", "label").withColumnRenamed ("_2", "id")
+    label_indexed = label_indexed.withColumnRenamed("_1", "label").withColumnRenamed("_2", "id")
     // Aggiungo al dataframe dei punti una colonna con le label del cluster corrispondente
-    var merged_df = empDFProva.join (label_indexed, empDFProva ("index") === label_indexed ("id") )
-    merged_df = merged_df.drop ("index").drop ("country").drop ("year").drop ("id")
+    var merged_df = empDFProva.join(label_indexed, empDFProva("index") === label_indexed("id"))
+    merged_df = merged_df.drop("index").drop("country").drop("year").drop("id")
     //merged_df.show(100)
 
     // Salvo i dati del dataframe finale (co2 e gdp dei punti con label del cluster relativo)
     //merged_df.coalesce(1).write.option("header", "true").csv("output_csv")
-    // Creazione del grafico
-    graph (cluster, dizionario, col_co2, col_gdp)
-    return 0
   }
-////////////////////////////////////////
+  */
+
+/////////////////////////////////////////////////////////////////////////
   def main(args: Array[String]): Unit = {
+    //cancella tutti i grafici salvati precedentemente
+    for {
+      files <- Option(new File(".").listFiles)
+      file <- files if file.getName.endsWith(".html")
+    } file.delete()
 
    var conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")
     val sc = new SparkContext(conf)
@@ -255,12 +283,10 @@ object test
     for (anno <- 1990 to 2013) mapAnnoDF += (anno -> df2.filter(df2("year") === anno))
     //mapAnnoDF(2003).toDF().show()
     ////////
-    val anni : List[Int] = List.range(1990, 2014)   // dal 1959 al 2013
+    val anni : List[Int] = List.range(1990, 1995)   // List.range(a, b) = from a to b-1
     val df_annuali : List[DataFrame] = anni.map(mapAnnoDF(_).toDF())
-    println(anni.map(mapAnnoDF(_).toDF()))
     df_annuali.map(ward(_, sc))
-    //df_annuali.map(_.show())
-    // inizio funzione ward(empDFProva)
-    var empDFProva = mapAnnoDF(2003).toDF()
+
+    //time(df_annuali.map(ward(_, sc)))   // senza parallellizare 48063ms
   }
 }
