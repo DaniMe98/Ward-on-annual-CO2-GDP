@@ -1,4 +1,4 @@
-import org.apache.spark.sql.{DataFrame, SQLContext}
+import org.apache.spark.sql.{DataFrame, SQLContext, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext, scheduler}
 import org.apache.log4j.Level
 import org.apache.log4j.{Level, Logger}
@@ -8,6 +8,7 @@ import element._
 import layout._
 import Plotly._
 import org.apache.hadoop.shaded.org.jline.keymap.KeyMap.display
+
 import math.pow
 import java.io._
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
@@ -66,7 +67,7 @@ object test
     var ptMedio = Point(X, Y)
     var error_square = 0.0
     var point = Point(0.0, 0.0)
-    for (i <- 0 to n - 1) {
+    for (i <- (0 until n )) {
       point = Point(all_x(i), all_y(i))
       error_square = error_square + ptMedio.error_square_fun(point)
     }
@@ -117,22 +118,22 @@ object test
   def graph(cluster: List[Int], dizionario: List[List[Int]], col_co2: List[Double], col_gdp: List[Double], year: String): File = {
     var data: List[Trace] = List()
 
-    for (i <- 0 to cluster.length - 1) {
+    for (i <- (0 until cluster.length )) {
       var extractor = expand(List(cluster(i)), dizionario)
       val trace = Scatter(
         extractor.map(col_co2(_)), //List(1, 2, 3, 4),
         extractor.map(col_gdp(_)), //List(10, 15, 13, 17),
         mode = ScatterMode(ScatterMode.Markers)
+
       )
       data = data :+ trace
     }
-    val x = Layout(
-      title = "x",
-    )
 
     val layout = Layout(
       title = "Ward Plot on CO2/GDP"
     )//.withXaxis(xAxisOptions)
+
+
 
     Plotly.plot("ward_"+year+".html", data, layout)
   }
@@ -140,6 +141,7 @@ object test
 
   def ward(empDFProva2: DataFrame, sc : SparkContext): Int = {
 
+    SparkSession.builder
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
     import sqlContext.implicits._
 
@@ -167,12 +169,12 @@ object test
     println (dizionario)
 
     // APPLICAZIONE WARD
-    for (counter <- 1 to original_lenght - 1) {
+    for (counter <- (1 until original_lenght)) {
     // Creazione delle combinazioni con i valori del forest disponibili(!= -1)
     var combinazioni = forest.filter(_ != (- 1)).combinations(2).toList
 
     //mapping della lista di combinazioni con l'errore quadratico associato
-    val error_list = combinazioni.map(distance(xy_zip, _, dizionario))
+    val error_list = combinazioni.par.map(distance(xy_zip, _, dizionario))
 
     // Combinazione con l'errore minimo minore
     val coppia = combinazioni(error_list.indexOf(error_list.min))
@@ -198,7 +200,7 @@ object test
     // NUMERO DI CLUSTER = TAGLIO DEL DENDOGRAMMA
     var cluster: List[Int] = List()
     //scorro tutti i valori presenti nel dizionario della root(ultimo cluster creato)
-    for (i <- dizionario.last(0) to dizionario.length - 1) {
+    for (i <- dizionario.last(0) until dizionario.length) {
       //println("---------------------------------------")
       //println("CLUSTER NUMERO ->" + i)
       //println("CLUSTER ->" + dizionario(i))
@@ -285,8 +287,11 @@ object test
     ////////
     val anni : List[Int] = List.range(1990, 1995)   // List.range(a, b) = from a to b-1
     val df_annuali : List[DataFrame] = anni.map(mapAnnoDF(_).toDF())
-    df_annuali.map(ward(_, sc))
+    //df_annuali.map(ward(_, sc))
 
-    //time(df_annuali.map(ward(_, sc)))   // senza parallellizare 48063ms
+    for (k <- (0 to anni.length).par){
+      time(ward(df_annuali(k),sc))
+    }
+    // time(df_annuali.par.map(ward(_, sc)))   senza parallellizare 48063ms
   }
 }
