@@ -19,7 +19,7 @@ import java.util.concurrent._
 import scala.util.DynamicVariable
 
 
-object test
+object test extends java.io.Serializable
 {
 
   var original_lenght = 0
@@ -39,12 +39,12 @@ object test
     println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
     result
   }
-/*
-  val scheduler = new DynamicVariable[TaskScheduler](new DefaultTaskScheduler)
-  def parallel[A, B](taskA: => A, taskB: => B): (A, B) = {
-    scheduler.value.parallel(taskA, taskB)
-  }
-*/
+  /*
+    val scheduler = new DynamicVariable[TaskScheduler](new DefaultTaskScheduler)
+    def parallel[A, B](taskA: => A, taskB: => B): (A, B) = {
+      scheduler.value.parallel(taskA, taskB)
+    }
+  */
   def distance(dataFrame: List[(Double, Double)], points: List[Int], dizionario: List[List[Int]]): Double = {
     //0 1 2 3 4   5     6   forest
     //0 1 2 3 4 (0,1) (3,5) dizionario
@@ -55,13 +55,15 @@ object test
     var X, Y: Double = 0
     var points_new = expand(points, dizionario)
     val n = points_new.length
-    for (i <- points_new) {
+    //println(n + "--"+ dataFrame.length)
+    for (i <-points_new) {
       all_x = all_x :+ dataFrame(i)._1 //CO2
       all_y = all_y :+ dataFrame(i)._2 //GDP
 
       X = X + dataFrame(i)._1
       Y = Y + dataFrame(i)._2
     }
+
     X = X / points_new.length
     Y = Y / points_new.length
     var ptMedio = Point(X, Y)
@@ -129,15 +131,41 @@ object test
       data = data :+ trace
     }
 
+    val xaxis = Axis(
+      title = "GDP"
+    )
+
+    val yaxis = Axis(
+      title = "Co2"
+    )
+
     val layout = Layout(
       title = "Ward Plot on CO2/GDP"
-    )//.withXaxis(xAxisOptions)
-
-
+    ).withXaxis(xaxis).withYaxis(yaxis)
 
     Plotly.plot("ward_"+year+".html", data, layout)
   }
+
   /////////////////////////////////////
+
+  def graphicMap(sc: SparkContext): Unit={
+    case class WorldEntry(country: String, value: Int)
+
+    val worldRDD = sc.parallelize(
+
+      WorldEntry("USA", 1000) ::
+
+        WorldEntry("JPN", 23) ::
+
+        WorldEntry("GBR", 23) ::
+
+        WorldEntry("FRA", 21) ::
+
+        WorldEntry("TUR", 3) ::      Nil)
+    val prova = worldRDD.toString()
+
+
+  }
 
   def ward(empDFProva2: DataFrame, sc : SparkContext): Int = {
 
@@ -170,29 +198,29 @@ object test
 
     // APPLICAZIONE WARD
     for (counter <- (1 until original_lenght)) {
-    // Creazione delle combinazioni con i valori del forest disponibili(!= -1)
-    var combinazioni = forest.filter(_ != (- 1)).combinations(2).toList
+      // Creazione delle combinazioni con i valori del forest disponibili(!= -1)
+      var combinazioni = forest.filter(_ != (- 1)).combinations(2).toList
 
-    //mapping della lista di combinazioni con l'errore quadratico associato
-    val error_list = combinazioni.par.map(distance(xy_zip, _, dizionario))
+      //mapping della lista di combinazioni con l'errore quadratico associato
+      val error_list = combinazioni.map(distance(xy_zip, _, dizionario))
 
-    // Combinazione con l'errore minimo minore
-    val coppia = combinazioni(error_list.indexOf(error_list.min))
+      // Combinazione con l'errore minimo minore
+      val coppia = combinazioni(error_list.indexOf(error_list.min))
 
-    // Aggiornamento dei forest, eliminiamo i cluster appena uniti dal forest
-    forest = forest.updated (coppia (0), - 1) // List.updated(index, new_value)
-    forest = forest.updated (coppia (1), - 1)
-    // Creo un nuovo slot nei forest
-    forest = forest :+ forest.length
-    // Aggiungo la combinazione trovata corrispondente al nuovo slot del forest
-    dizionario = dizionario :+ coppia
-  }
+      // Aggiornamento dei forest, eliminiamo i cluster appena uniti dal forest
+      forest = forest.updated (coppia (0), - 1) // List.updated(index, new_value)
+      forest = forest.updated (coppia (1), - 1)
+      // Creo un nuovo slot nei forest
+      forest = forest :+ forest.length
+      // Aggiungo la combinazione trovata corrispondente al nuovo slot del forest
+      dizionario = dizionario :+ coppia
+    }
 
     // Creazione del grafico
     var cluster = number_cluster(dizionario)
     //csv (cluster, empDFProva, dizionario, sc)
     graph (cluster, dizionario, col_co2, col_gdp, year)
-    return 0
+    0
   }
 
   def number_cluster(dizionario: List[List[Int]]): List[Int] = {
@@ -219,7 +247,7 @@ object test
       }
     }
     println("NUMERO DI CLUSTER: " + cluster.length)
-    return cluster
+    cluster
   }
 
   /////////////////////////////////////////////////////////////////
@@ -250,7 +278,7 @@ object test
   }
   */
 
-/////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////
   def main(args: Array[String]): Unit = {
     //cancella tutti i grafici salvati precedentemente
     for {
@@ -258,7 +286,7 @@ object test
       file <- files if file.getName.endsWith(".html")
     } file.delete()
 
-   var conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")
+    var conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")
     val sc = new SparkContext(conf)
     val sqlContext = new SQLContext(sc)
     import sqlContext.implicits._
@@ -285,13 +313,14 @@ object test
     for (anno <- 1990 to 2013) mapAnnoDF += (anno -> df2.filter(df2("year") === anno))
     //mapAnnoDF(2003).toDF().show()
     ////////
-    val anni : List[Int] = List.range(1990, 1995)   // List.range(a, b) = from a to b-1
+    val anni : List[Int] = List.range(2000, 2005)   // List.range(a, b) = from a to b-1
     val df_annuali : List[DataFrame] = anni.map(mapAnnoDF(_).toDF())
-    //df_annuali.map(ward(_, sc))
+    //df_annuali.par.map(ward(_, sc))
 
-    for (k <- (0 to anni.length).par){
-      time(ward(df_annuali(k),sc))
-    }
-    // time(df_annuali.par.map(ward(_, sc)))   senza parallellizare 48063ms
+    // time(for (k <- (0 to anni.length).par){      ward(df_annuali(k),sc)   })
+    // val df_RDD = sc.parallelize(df_annuali)
+    time(df_annuali.map(ward(_, sc))) //  senza parallellizare 48063ms
+
+    //graphicMap(sc)
   }
 }
