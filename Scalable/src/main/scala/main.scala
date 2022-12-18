@@ -193,16 +193,37 @@ object test extends java.io.Serializable
     // zip di co2 e gdp
     val xy_zip = col_co2 zip col_gdp
 
-    println (xy_zip)
-    println (dizionario)
+    //UTILE! println (xy_zip)
+    //UTILE! println (dizionario)
 
     // APPLICAZIONE WARD
+    println("--------------------INIZIO CALCOLO--------------------------")
     for (counter <- (1 until original_lenght)) {
       // Creazione delle combinazioni con i valori del forest disponibili(!= -1)
       var combinazioni = forest.filter(_ != (- 1)).combinations(2).toList
 
       //mapping della lista di combinazioni con l'errore quadratico associato
-      val error_list = combinazioni.map(distance(xy_zip, _, dizionario))
+
+      // Versione sequenziale
+      //val error_list = combinazioni.map(distance(xy_zip, _, dizionario))
+
+
+
+      // Versione parallela
+
+      var error_list = new Array[Double](combinazioni.length)
+
+      for (i <- (0 until combinazioni.length).par) {
+        error_list(i) = distance(xy_zip, combinazioni(i), dizionario)
+      }
+
+
+      //sequenziale 88934ms ---- 86414ms
+      //parallela 62914ms ---- 92400ms
+
+      //prova senza accesso concorrente in memoria: seq-> 18761ms , par-> 17936ms
+
+
 
       // Combinazione con l'errore minimo minore
       val coppia = combinazioni(error_list.indexOf(error_list.min))
@@ -214,6 +235,7 @@ object test extends java.io.Serializable
       forest = forest :+ forest.length
       // Aggiungo la combinazione trovata corrispondente al nuovo slot del forest
       dizionario = dizionario :+ coppia
+
     }
 
     // Creazione del grafico
@@ -224,6 +246,10 @@ object test extends java.io.Serializable
   }
 
   def number_cluster(dizionario: List[List[Int]]): List[Int] = {
+    /*
+    val last = dizionario.last(0)
+    val out = last :: dizionario.drop(last + 1).flatten.filter(_ < last)
+    println("CLUSTER: " + out.length) */
 
     // NUMERO DI CLUSTER = TAGLIO DEL DENDOGRAMMA
     var cluster: List[Int] = List()
@@ -313,7 +339,7 @@ object test extends java.io.Serializable
     for (anno <- 1990 to 2013) mapAnnoDF += (anno -> df2.filter(df2("year") === anno))
     //mapAnnoDF(2003).toDF().show()
     ////////
-    val anni : List[Int] = List.range(2000, 2005)   // List.range(a, b) = from a to b-1
+    val anni : List[Int] = List.range(1995, 2005)   // List.range(a, b) = from a to b-1
     val df_annuali : List[DataFrame] = anni.map(mapAnnoDF(_).toDF())
     //df_annuali.par.map(ward(_, sc))
 
