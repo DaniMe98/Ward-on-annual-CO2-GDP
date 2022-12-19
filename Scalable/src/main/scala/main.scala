@@ -78,8 +78,7 @@ object test extends java.io.Serializable
       for (i <- points) { //points= List(1,6)   i=1  i=6
         if (dizionario(i).length > 1) {
           var temp_list: List[Int] = dizionario(i)
-          points_extend = points_extend :+ temp_list(0)
-          points_extend = points_extend :+ temp_list(1)
+          points_extend = points_extend :+ temp_list(0) :+ temp_list(1)
           points_extend = expand(points_extend, dizionario)
         } else {
           points_extend = points_extend :+ i
@@ -111,7 +110,7 @@ object test extends java.io.Serializable
 
 
   ///////////////////////////////////////////777
-  def graph(cluster: List[Int], dizionario: List[List[Int]], col_co2: List[Double], col_gdp: List[Double], year: String): File = {
+  def graph(cluster: List[Int], dizionario: List[List[Int]], col_co2: List[Double], col_gdp: List[Double], year: String,col_country: List[String]): File = {
     var data: List[Trace] = List()
 
     for (i <- (0 until cluster.length )) {
@@ -119,8 +118,8 @@ object test extends java.io.Serializable
       val trace = Scatter(
         extractor.map(col_co2(_)), //List(1, 2, 3, 4),
         extractor.map(col_gdp(_)), //List(10, 15, 13, 17),
-        mode = ScatterMode(ScatterMode.Markers)
-
+        mode = ScatterMode(ScatterMode.Markers),
+        text = extractor.map(col_country(_))
       )
       data = data :+ trace
     }
@@ -184,7 +183,8 @@ object test extends java.io.Serializable
     val col_co2 : List[Double] = empDFProva.select("co2").map(_.getString(0)).collectAsList.map(_.toDouble).toList
     // lista contenente i valori di gdp
     val col_gdp = empDFProva.select("gdp").map(_.getDouble(0)).collectAsList.toList
-
+    // lista contenente i valori di country
+    val col_country = empDFProva.select("country").map(_.getString(0)).collectAsList.toList
 
     // zip di co2 e gdp
     val xy_zip = col_co2 zip col_gdp
@@ -201,7 +201,7 @@ object test extends java.io.Serializable
       var combinazioni = forest.filter(_ != (- 1)).combinations(2).toList
 
       //mapping della lista di combinazioni con l'errore quadratico associato
-      val error_list = combinazioni.par.map(distance(xy_zip, _, dizionario))
+      val error_list = combinazioni.map(distance(xy_zip, _, dizionario))
 
       // Combinazione con l'errore minimo minore
       val coppia = combinazioni(error_list.indexOf(error_list.min))
@@ -217,9 +217,9 @@ object test extends java.io.Serializable
     }
 
     // Creazione del grafico
-    var cluster = number_cluster(dizionario)
+    val cluster = number_cluster(dizionario)
     //csv (cluster, empDFProva, dizionario, sc)
-    graph (cluster, dizionario, col_co2, col_gdp, year)
+    graph (cluster, dizionario, col_co2, col_gdp, year,col_country)
     0
   }
 
@@ -270,7 +270,7 @@ object test extends java.io.Serializable
       file <- files if file.getName.endsWith(".html")
     } file.delete()
 
-    var conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")
+    val conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")
     val sc = new SparkContext(conf)
     val sqlContext = new SQLContext(sc)
     import sqlContext.implicits._
