@@ -1,22 +1,15 @@
-import org.apache.spark.sql.{DataFrame, SQLContext, SparkSession}
-import org.apache.spark.{SparkConf, SparkContext, scheduler}
-import org.apache.log4j.Level
-import org.apache.log4j.{Level, Logger}
-import org.apache.spark.sql.functions.{lit, typedLit}
-import plotly._
-import element._
-import layout._
-import Plotly._
-import org.apache.hadoop.shaded.org.jline.keymap.KeyMap.display
-
-import math.pow
-import java.io._
-import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
-import scala.collection.immutable.Nil.combinations
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.{DataFrame, SQLContext, SparkSession}
+import org.apache.spark.{SparkConf, SparkContext}
+import plotly.Plotly._
+import plotly._
+import plotly.element._
+import plotly.layout._
 
+import java.io._
 import java.util.concurrent._
-import scala.util.DynamicVariable
+import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
+import scala.math.pow
 
 
 object test extends java.io.Serializable
@@ -39,42 +32,43 @@ object test extends java.io.Serializable
     println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
     result
   }
+
   /*
     val scheduler = new DynamicVariable[TaskScheduler](new DefaultTaskScheduler)
     def parallel[A, B](taskA: => A, taskB: => B): (A, B) = {
       scheduler.value.parallel(taskA, taskB)
     }
   */
+
   def distance(dataFrame: List[(Double, Double)], points: List[Int], dizionario: List[List[Int]]): Double = {
+
     //0 1 2 3 4   5     6   forest
     //0 1 2 3 4 (0,1) (3,5) dizionario
     //(0,1)  (0,2) ,.... (5,6) combinazioni
-    //(3,5)-> 3,(0,1) -> 3,0,1 flat
-    var all_x: List[Double] = List()
-    var all_y: List[Double] = List()
-    var X, Y: Double = 0
-    var points_new = expand(points, dizionario)
-    val n = points_new.length
-    //println(n + "--"+ dataFrame.length)
-    for (i <-points_new) {
-      all_x = all_x :+ dataFrame(i)._1 //CO2
-      all_y = all_y :+ dataFrame(i)._2 //GDP
+    //(3,5)-> 3,(0,1) -> 3,0,1 expand
 
-      X = X + dataFrame(i)._1
-      Y = Y + dataFrame(i)._2
-    }
+    val points_new = expand(points, dizionario)
+    val points_new_length = points_new.length
 
-    X = X / points_new.length
-    Y = Y / points_new.length
-    var ptMedio = Point(X, Y)
-    var error_square = 0.0
-    var point = Point(0.0, 0.0)
-    for (i <- (0 until n )) {
-      point = Point(all_x(i), all_y(i))
-      error_square = error_square + ptMedio.error_square_fun(point)
-    }
+    //println("POINT NEW: " + points_new)
+    //println("LENGTH DATAFRAME: "+ dataFrame.length)
+
+    val all_x = points_new.map(dataFrame(_)._1)   //CO2
+    val all_y = points_new.map(dataFrame(_)._2)   //CO2
+
+    /*
+    val X = all_x.sum / points_new_length
+    val Y = all_y.sum / points_new_length
+    val ptMedio = Point(X, Y)
+    */
+    // OTTIMIZZAZIONE POSSIBILE:
+    val ptMedio = Point(all_x.sum / points_new_length, all_y.sum / points_new_length)
+
+    val error_square = (all_x zip all_y).map(punto => ptMedio.error_square_fun(Point(punto._1, punto._2))).sum
+
     error_square
   }
+
   ///////////////////////////////// EXPAND
   def expand(points: List[Int], dizionario: List[List[Int]]): List[Int] = {
     var points_extend: List[Int] = List()
@@ -143,7 +137,7 @@ object test extends java.io.Serializable
       title = "Ward Plot on CO2/GDP"
     ).withXaxis(xaxis).withYaxis(yaxis)
 
-    Plotly.plot("ward_"+year+".html", data, layout, openInBrowser=true)
+    Plotly.plot("ward_"+year+".html", data, layout, openInBrowser=false)
   }
 
   /////////////////////////////////////
@@ -207,30 +201,7 @@ object test extends java.io.Serializable
       var combinazioni = forest.filter(_ != (- 1)).combinations(2).toList
 
       //mapping della lista di combinazioni con l'errore quadratico associato
-
-      // Versione sequenziale
       val error_list = combinazioni.par.map(distance(xy_zip, _, dizionario))
-
-
-
-      // Versione parallela
-      //216509ms 262942ms
-      //198643ms
-      //121461ms
-      /*var error_list = new Array[Double](combinazioni.length)
-
-      for (i <- (0 until combinazioni.length).par) {
-        error_list(i) = distance(xy_zip, combinazioni(i), dizionario)
-      }*/
-
-  //83186ms
-      //sequenziale 88934ms ---- 86414ms ----- 89201ms
-      //parallela 62914ms ---- 92400ms ---- 88555ms
-
-      //prova senza accesso concorrente in memoria: seq-> 18761ms , par-> 17936ms
-
-
-
 
       // Combinazione con l'errore minimo minore
       val coppia = combinazioni(error_list.indexOf(error_list.min))
