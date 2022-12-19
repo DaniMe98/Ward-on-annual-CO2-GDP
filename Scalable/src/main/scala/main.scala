@@ -143,7 +143,7 @@ object test extends java.io.Serializable
       title = "Ward Plot on CO2/GDP"
     ).withXaxis(xaxis).withYaxis(yaxis)
 
-    Plotly.plot("ward_"+year+".html", data, layout)
+    Plotly.plot("ward_"+year+".html", data, layout, openInBrowser=true)
   }
 
   /////////////////////////////////////
@@ -190,8 +190,12 @@ object test extends java.io.Serializable
     val col_co2 : List[Double] = empDFProva.select("co2").map(_.getString(0)).collectAsList.map(_.toDouble).toList
     // lista contenente i valori di gdp
     val col_gdp = empDFProva.select("gdp").map(_.getDouble(0)).collectAsList.toList
+
+
     // zip di co2 e gdp
     val xy_zip = col_co2 zip col_gdp
+
+
 
     //UTILE! println (xy_zip)
     //UTILE! println (dizionario)
@@ -205,23 +209,26 @@ object test extends java.io.Serializable
       //mapping della lista di combinazioni con l'errore quadratico associato
 
       // Versione sequenziale
-      //val error_list = combinazioni.map(distance(xy_zip, _, dizionario))
+      val error_list = combinazioni.par.map(distance(xy_zip, _, dizionario))
 
 
 
       // Versione parallela
-
-      var error_list = new Array[Double](combinazioni.length)
+      //216509ms 262942ms
+      //198643ms
+      //121461ms
+      /*var error_list = new Array[Double](combinazioni.length)
 
       for (i <- (0 until combinazioni.length).par) {
         error_list(i) = distance(xy_zip, combinazioni(i), dizionario)
-      }
+      }*/
 
-
-      //sequenziale 88934ms ---- 86414ms
-      //parallela 62914ms ---- 92400ms
+  //83186ms
+      //sequenziale 88934ms ---- 86414ms ----- 89201ms
+      //parallela 62914ms ---- 92400ms ---- 88555ms
 
       //prova senza accesso concorrente in memoria: seq-> 18761ms , par-> 17936ms
+
 
 
 
@@ -246,34 +253,14 @@ object test extends java.io.Serializable
   }
 
   def number_cluster(dizionario: List[List[Int]]): List[Int] = {
-    /*
     val last = dizionario.last(0)
     val out = last :: dizionario.drop(last + 1).flatten.filter(_ < last)
-    println("CLUSTER: " + out.length) */
-
-    // NUMERO DI CLUSTER = TAGLIO DEL DENDOGRAMMA
-    var cluster: List[Int] = List()
-    //scorro tutti i valori presenti nel dizionario della root(ultimo cluster creato)
-    for (i <- dizionario.last(0) until dizionario.length) {
-      //println("---------------------------------------")
-      //println("CLUSTER NUMERO ->" + i)
-      //println("CLUSTER ->" + dizionario(i))
-
-      //Salvo nel primo cluster direttamente il valore del ramo più lungo del dendogramma
-      if (i == dizionario.last(0)) {
-        cluster = cluster :+ i
-      } else {
-        //Controllo che i cluster analizzati siano più piccoli del valore del ramo più lungo del dendogramma
-        if (dizionario(i)(0) < dizionario.last(0)) {
-          cluster = cluster :+ dizionario(i)(0)
-        }
-        if (dizionario(i)(1) < dizionario.last(0)) {
-          cluster = cluster :+ dizionario(i)(1)
-        }
-      }
-    }
-    println("NUMERO DI CLUSTER: " + cluster.length)
-    cluster
+    out
+    // last(0) = Primo elemento dell'ultima coppia del dizionario che verrà preso come cluster.
+    // out =  - "concateno" last(0)
+    //        - Droppo tutti i valori prima di last perchè mi interessano tutti quelli tra last(0) e last(1)
+    //        - Flatten, mi serve per mettere tutti i valori delle tuple nel dizionario allo stesso livello
+    //        - Filtro tutti i valori in modo che siano <last.
   }
 
   /////////////////////////////////////////////////////////////////
@@ -339,7 +326,7 @@ object test extends java.io.Serializable
     for (anno <- 1990 to 2013) mapAnnoDF += (anno -> df2.filter(df2("year") === anno))
     //mapAnnoDF(2003).toDF().show()
     ////////
-    val anni : List[Int] = List.range(1995, 2005)   // List.range(a, b) = from a to b-1
+    val anni : List[Int] = List.range(1990, 2014)   // List.range(a, b) = from a to b-1
     val df_annuali : List[DataFrame] = anni.map(mapAnnoDF(_).toDF())
     //df_annuali.par.map(ward(_, sc))
 
