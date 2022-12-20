@@ -106,7 +106,7 @@ object test extends java.io.Serializable
 
   /////////////////////////////////////
 
-  def ward(data: DataFrame, sc : SparkContext): Int = {
+  def ward(data: DataFrame, sc : SparkContext): Unit = {
 
     SparkSession.builder
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
@@ -120,8 +120,7 @@ object test extends java.io.Serializable
     val year = data_reindexed.select(col("year")).first.getString(0)
 
     // forest = List(0, 1, 2, 3, 4, 5, 6, 7, 8 ... len(df))
-    var forest: List[Int] = List()
-    forest = List.range(0, data_reindexed.count().toInt)
+    var forest: List[Int] = List.range(0, data_reindexed.count().toInt)
 
     // dizionario in cui sono salvate le combinazioni dei cluster
     var dizionario: List[List[Int]] = forest.map(List(_))
@@ -138,16 +137,12 @@ object test extends java.io.Serializable
 
     // APPLICAZIONE WARD
     println("--------------------INIZIO CALCOLO--------------------------")
-
-    val t0 = System.nanoTime()
-
-    for (_ <- 1 until original_lenght) {  // 1290ms    // Scorre le nazioni del singolo anno
-    //while(forest.count(_ > -1) > 1) {   // 1381ms
+    while(forest.count(_ > -1) > 1) {   // Finche' non terminano le possibili combinazioni
 
       // Creazione delle combinazioni con i valori del forest disponibili(!= -1)
       val combinazioni = forest.filter(_ != (- 1)).combinations(2).toList
 
-      //mapping della lista di combinazioni con l'errore quadratico associato
+      // Mapping della lista di combinazioni con l'errore quadratico associato
       val error_list = combinazioni.par.map(distance(xy_zip, _, dizionario))
 
       // Combinazione con l'errore minimo minore
@@ -162,20 +157,11 @@ object test extends java.io.Serializable
 
       // Aggiungo la combinazione trovata corrispondente al nuovo slot del forest
       dizionario = dizionario :+ coppia
-
-      println(forest)
     }
-    val t1 = System.nanoTime()
-    println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
 
-
-    //if(forest.count(_ > -1) == 1) println("FINE")
-
-    // Creazione del grafico
     val cluster = number_cluster(dizionario)
-    //csv(cluster, data_reindexed, dizionario, sc)
-    graph(cluster, dizionario, col_co2, col_gdp, year,col_country)
-    0   // PERCHE' RESTITUISCE ZERO ???
+    graph(cluster, dizionario, col_co2, col_gdp, year,col_country)    // Creazione del grafico
+    //csv(cluster, data_reindexed, dizionario, sc)                    // Creazione del csv
   }
 
   def number_cluster(dizionario: List[List[Int]]): List[Int] = {
@@ -189,37 +175,9 @@ object test extends java.io.Serializable
     //        - Filtro tutti i valori in modo che siano <last.
   }
 
-  /////////////////////////////////////////////////////////////////
-  /*
-  def csv (cluster: List[Int], empDFProva: DataFrame, dizionario: List[List[Int]], sc: SparkContext ): Unit = {
-    import sqlContext.implicits._
-    val sqlContext = new org.apache.spark.sql.SQLContext(sc)
-
-    // UNIONE DEI CLUSTER LABEL AL DATAFRAME INIZIALE
-    // Le radici dei cluster vengono espanse nei punti contenuti nel cluster
-    val cluster_expanded: List[List[Int]] = cluster.map(x => expand(List(x), dizionario))
-    // I punti dei cluster vengono associati con la label del cluster corrispondente
-    val cluster_zipped: List[List[(Int, Int)]] = cluster_expanded.zipWithIndex.map(x => x._1.zip(List.fill[Int](x._1.length)(x._2)))
-    // Le liste con i punti dei vari cluster vengono concatenate in un'unica lista e ordinate secondo l'ordine dei punti nel dataframe
-    val cluster_flat: List[(Int, Int)] = cluster_zipped.flatten.sortBy(_._1)
-    // Tengo soltanto le label associate ai punti (ordinate secondo l'ordinamento dei punti)
-    val label: List[Int] = cluster_flat.map(_._2)
-    // Aggiungo indici alle label per poter fare il join con il dataframe dei punti
-    var label_indexed: DataFrame = label.zipWithIndex.toDF()
-    label_indexed = label_indexed.withColumnRenamed("_1", "label").withColumnRenamed("_2", "id")
-    // Aggiungo al dataframe dei punti una colonna con le label del cluster corrispondente
-    var merged_df = empDFProva.join(label_indexed, empDFProva("index") === label_indexed("id"))
-    merged_df = merged_df.drop("index").drop("country").drop("year").drop("id")
-    //merged_df.show(100)
-
-    // Salvo i dati del dataframe finale (co2 e gdp dei punti con label del cluster relativo)
-    //merged_df.coalesce(1).write.option("header", "true").csv("output_csv")
-  }
-  */
-
-  /////////////////////////////////////////////////////////////////////////
   def main(args: Array[String]): Unit = {
-    //cancella tutti i grafici salvati precedentemente
+
+    // Cancella tutti i grafici salvati precedentemente
     for {
       files <- Option(new File(".").listFiles)
       file <- files if file.getName.endsWith(".html")
@@ -230,22 +188,38 @@ object test extends java.io.Serializable
     val sqlContext = new SQLContext(sc)
     import sqlContext.implicits._
 
-    val textRDD = sc.textFile("data_prepared.csv")
+    // Prende i dati in input
+    val df_textRDD = sc.textFile("data_prepared.csv")
 
-    var empRdd = textRDD.map {
+    // I dati vengono divisi in colonne secondo le virgole
+    val df_columnedRDD = df_textRDD.map {
       line =>
         val col = line.split(",")
         Country(col(0), col(1), col(2), col(3), col(4))
     }
-    val empRddZipped = empRdd.zipWithIndex()
-    empRdd = empRddZipped.filter(_._2 > 0).keys    // Elimino la prima riga (l'intestazione) dall'RDD
 
-    val empDF = empRdd.toDF()
+    ////////// PROSEGUIRE DA QUI PER IL MIGLIORAMENTO CODICE
+    // (ERRORE COLLEGATO AL BORDELLO DI COLLECTLIST RIGA 129)
 
-
+    var empDF = df_columnedRDD.toDF()
+    //DF CASTING
+    /*
+    // CODICE DI PARTENZA
     var df2 = empDF.withColumn("year", empDF("year").cast("int"))
     df2 = empDF.withColumn("co2", empDF("co2").cast("double"))
-    df2 = empDF.withColumn("gdp", empDF("gdp").cast("double"))//df2.show(100)
+    df2 = empDF.withColumn("gdp", empDF("gdp").cast("double"))
+    */
+    //PROVA
+    //Change the column data type
+    empDF.withColumn("year", empDF("year").cast("int"))
+    empDF.withColumn("co2", empDF("co2").cast("double"))
+    empDF.withColumn("gdp", empDF("gdp").cast("double"))
+    var df2 = empDF
+
+
+
+    df2.show(100)
+
     //df2.filter(df2("year") === "1960").show(true)
 
     var mapAnnoDF = Map[Int, DataFrame]()
@@ -258,8 +232,55 @@ object test extends java.io.Serializable
 
     // time(for (k <- (0 to anni.length).par){      ward(df_annuali(k),sc)   })
     // val df_RDD = sc.parallelize(df_annuali)
+
     time(df_annuali.map(ward(_, sc))) //  senza parallellizare 48063ms
 
+
     //graphicMap(sc)
+
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/////////////////////////////////////////////////////////////////
+/*
+def csv (cluster: List[Int], empDFProva: DataFrame, dizionario: List[List[Int]], sc: SparkContext ): Unit = {
+  import sqlContext.implicits._
+  val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+
+  // UNIONE DEI CLUSTER LABEL AL DATAFRAME INIZIALE
+  // Le radici dei cluster vengono espanse nei punti contenuti nel cluster
+  val cluster_expanded: List[List[Int]] = cluster.map(x => expand(List(x), dizionario))
+  // I punti dei cluster vengono associati con la label del cluster corrispondente
+  val cluster_zipped: List[List[(Int, Int)]] = cluster_expanded.zipWithIndex.map(x => x._1.zip(List.fill[Int](x._1.length)(x._2)))
+  // Le liste con i punti dei vari cluster vengono concatenate in un'unica lista e ordinate secondo l'ordine dei punti nel dataframe
+  val cluster_flat: List[(Int, Int)] = cluster_zipped.flatten.sortBy(_._1)
+  // Tengo soltanto le label associate ai punti (ordinate secondo l'ordinamento dei punti)
+  val label: List[Int] = cluster_flat.map(_._2)
+  // Aggiungo indici alle label per poter fare il join con il dataframe dei punti
+  var label_indexed: DataFrame = label.zipWithIndex.toDF()
+  label_indexed = label_indexed.withColumnRenamed("_1", "label").withColumnRenamed("_2", "id")
+  // Aggiungo al dataframe dei punti una colonna con le label del cluster corrispondente
+  var merged_df = empDFProva.join(label_indexed, empDFProva("index") === label_indexed("id"))
+  merged_df = merged_df.drop("index").drop("country").drop("year").drop("id")
+  //merged_df.show(100)
+
+  // Salvo i dati del dataframe finale (co2 e gdp dei punti con label del cluster relativo)
+  //merged_df.coalesce(1).write.option("header", "true").csv("output_csv")
+}
+*/
+
+/////////////////////////////////////////////////////////////////////////
