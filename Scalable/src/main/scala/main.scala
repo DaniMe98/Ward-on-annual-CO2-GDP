@@ -56,12 +56,6 @@ object test extends java.io.Serializable
     val all_x = points_new.map(dataFrame(_)._1)   //CO2
     val all_y = points_new.map(dataFrame(_)._2)   //CO2
 
-    /*
-    val X = all_x.sum / points_new_length
-    val Y = all_y.sum / points_new_length
-    val ptMedio = Point(X, Y)
-    */
-    // OTTIMIZZAZIONE POSSIBILE:
     val ptMedio = Point(all_x.sum / points_new_length, all_y.sum / points_new_length)
 
     val error_square = (all_x zip all_y).map(punto => ptMedio.error_square_fun(Point(punto._1, punto._2))).sum
@@ -69,52 +63,23 @@ object test extends java.io.Serializable
     error_square
   }
 
-  ///////////////////////////////// EXPAND
-  def expand(points: List[Int], dizionario: List[List[Int]]): List[Int] = {
-    var points_extend: List[Int] = List()
-    if (points.max < original_lenght) {
-      points
-    } else {
-      for (i <- points) { //points= List(1,6)   i=1  i=6
-        if (dizionario(i).length > 1) {
-          var temp_list: List[Int] = dizionario(i)
-          points_extend = points_extend :+ temp_list(0) :+ temp_list(1)
-          points_extend = expand(points_extend, dizionario)
-        } else {
-          points_extend = points_extend :+ i
-        }
-        /*
-        // VERSIONE ALTERNATIVA "alla maniera di Scala"
-        def aggiunta(i : Int) : List[Int] = dizionario(i) match {
+  def expand(points : List[Int], dizionario: List[List[Int]]): List[Int]  = {
 
-          case single_num : Int => points_extend = points_extend :+ single_num //point.extend.append(i)
-          case coppia : List[Int] => aggiunta(coppia(0))
-        }
-        */
-      }
-      points_extend
-    }
+    var expanded_points = points
+
+    while(! (expanded_points.max < original_lenght))
+      expanded_points = expanded_points.flatMap(dizionario(_))
+
+    expanded_points
   }
-  /*
-  // VERSIONE ALTERNATIVA "alla maniera di Scala" di expand
-  def expand1(l : List[Any])  = {
-    for (el <- l) {
-      el match {
-        case single_num : Int => points_extend = points_extend :+ single_num
-        case coppia : List[Int] => expand1(coppia)
-      }
-    }
-  }
-  */
-  ///////////////////////////////// EXPAND
 
 
-  ///////////////////////////////////////////777
   def graph(cluster: List[Int], dizionario: List[List[Int]], col_co2: List[Double], col_gdp: List[Double], year: String,col_country: List[String]): File = {
+
     var data: List[Trace] = List()
 
-    for (i <- (0 until cluster.length )) {
-      var extractor = expand(List(cluster(i)), dizionario)
+    for (i <- cluster.indices) {
+      val extractor = expand(List(cluster(i)), dizionario)    // Espande le radici dei cluster madre
       val trace = Scatter(
         extractor.map(col_co2(_)), //List(1, 2, 3, 4),
         extractor.map(col_gdp(_)), //List(10, 15, 13, 17),
@@ -141,86 +106,76 @@ object test extends java.io.Serializable
 
   /////////////////////////////////////
 
-  def graphicMap(sc: SparkContext): Unit={
-    case class WorldEntry(country: String, value: Int)
-
-    val worldRDD = sc.parallelize(
-
-      WorldEntry("USA", 1000) ::
-
-        WorldEntry("JPN", 23) ::
-
-        WorldEntry("GBR", 23) ::
-
-        WorldEntry("FRA", 21) ::
-
-        WorldEntry("TUR", 3) ::      Nil)
-    val prova = worldRDD.toString()
-
-
-  }
-
-  def ward(empDFProva2: DataFrame, sc : SparkContext): Int = {
+  def ward(data: DataFrame, sc : SparkContext): Int = {
 
     SparkSession.builder
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
     import sqlContext.implicits._
 
-    var empDFProva = empDFProva2.withColumn("index", monotonicallyIncreasingId)
-    empDFProva.show()
-    // forest = List(0, 1, 2, 3, 4, 5, 6, 7, 8 ... len(df)
+    val data_reindexed = data.withColumn("index", monotonically_increasing_id())    // Il DF ha gli indici discontinui, in questo modo gli indici diventano continui a partire dallo zero (0,1,2,...)
+    //data_reindexed.show()
+
+    original_lenght = data_reindexed.count().toInt
+
+    val year = data_reindexed.select(col("year")).first.getString(0)
+
+    // forest = List(0, 1, 2, 3, 4, 5, 6, 7, 8 ... len(df))
     var forest: List[Int] = List()
-    forest = List.range(0, empDFProva.count().toInt)
-    println("----------------------------------------------------")
-    var year = empDFProva.select(col("year")).first.getString(0)
-    println("----------------------------------------------------")
-    original_lenght = empDFProva.count().toInt
+    forest = List.range(0, data_reindexed.count().toInt)
 
     // dizionario in cui sono salvate le combinazioni dei cluster
     var dizionario: List[List[Int]] = forest.map(List(_))
 
     // lista contenente i valori di co2
-    val col_co2 : List[Double] = empDFProva.select("co2").map(_.getString(0)).collectAsList.map(_.toDouble).toList
+    val col_co2 : List[Double] = data_reindexed.select("co2").map(_.getString(0)).collectAsList.map(_.toDouble).toList
     // lista contenente i valori di gdp
-    val col_gdp = empDFProva.select("gdp").map(_.getDouble(0)).collectAsList.toList
+    val col_gdp = data_reindexed.select("gdp").map(_.getDouble(0)).collectAsList.toList
     // lista contenente i valori di country
-    val col_country = empDFProva.select("country").map(_.getString(0)).collectAsList.toList
+    val col_country = data_reindexed.select("country").map(_.getString(0)).collectAsList.toList
 
     // zip di co2 e gdp
     val xy_zip = col_co2 zip col_gdp
 
-
-
-    //UTILE! println (xy_zip)
-    //UTILE! println (dizionario)
-
     // APPLICAZIONE WARD
     println("--------------------INIZIO CALCOLO--------------------------")
-    for (counter <- (1 until original_lenght)) {
+
+    val t0 = System.nanoTime()
+
+    for (_ <- 1 until original_lenght) {  // 1290ms    // Scorre le nazioni del singolo anno
+    //while(forest.count(_ > -1) > 1) {   // 1381ms
+
       // Creazione delle combinazioni con i valori del forest disponibili(!= -1)
-      var combinazioni = forest.filter(_ != (- 1)).combinations(2).toList
+      val combinazioni = forest.filter(_ != (- 1)).combinations(2).toList
 
       //mapping della lista di combinazioni con l'errore quadratico associato
-      val error_list = combinazioni.map(distance(xy_zip, _, dizionario))
+      val error_list = combinazioni.par.map(distance(xy_zip, _, dizionario))
 
       // Combinazione con l'errore minimo minore
       val coppia = combinazioni(error_list.indexOf(error_list.min))
 
       // Aggiornamento dei forest, eliminiamo i cluster appena uniti dal forest
-      forest = forest.updated (coppia (0), - 1) // List.updated(index, new_value)
-      forest = forest.updated (coppia (1), - 1)
+      forest = forest.updated(coppia(0), -1) // List.updated(index, new_value)
+      forest = forest.updated(coppia(1), -1)
+
       // Creo un nuovo slot nei forest
       forest = forest :+ forest.length
+
       // Aggiungo la combinazione trovata corrispondente al nuovo slot del forest
       dizionario = dizionario :+ coppia
 
+      println(forest)
     }
+    val t1 = System.nanoTime()
+    println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
+
+
+    //if(forest.count(_ > -1) == 1) println("FINE")
 
     // Creazione del grafico
     val cluster = number_cluster(dizionario)
-    //csv (cluster, empDFProva, dizionario, sc)
-    graph (cluster, dizionario, col_co2, col_gdp, year,col_country)
-    0
+    //csv(cluster, data_reindexed, dizionario, sc)
+    graph(cluster, dizionario, col_co2, col_gdp, year,col_country)
+    0   // PERCHE' RESTITUISCE ZERO ???
   }
 
   def number_cluster(dizionario: List[List[Int]]): List[Int] = {
