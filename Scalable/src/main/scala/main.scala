@@ -74,7 +74,7 @@ object test extends java.io.Serializable
   }
 
 
-  def graph(cluster: List[Int], dizionario: List[List[Int]], col_co2: List[Double], col_gdp: List[Double], year: String,col_country: List[String]): File = {
+  def graph(cluster: List[Int], dizionario: List[List[Int]], col_co2: List[Double], col_gdp: List[Double], year: Int,col_country: List[String]): File = {
 
     var data: List[Trace] = List()
 
@@ -101,7 +101,7 @@ object test extends java.io.Serializable
       title = "Ward Plot on CO2/GDP"
     ).withXaxis(xaxis).withYaxis(yaxis)
 
-    Plotly.plot("ward_"+year+".html", data, layout, openInBrowser=false)
+    Plotly.plot("ward_"+ year.toString +".html", data, layout, openInBrowser=false)
   }
 
   /////////////////////////////////////
@@ -117,7 +117,7 @@ object test extends java.io.Serializable
 
     original_lenght = data_reindexed.count().toInt
 
-    val year = data_reindexed.select(col("year")).first.getString(0)
+    val year = data_reindexed.select(col("year")).first.getInt(0)
 
     // forest = List(0, 1, 2, 3, 4, 5, 6, 7, 8 ... len(df))
     var forest: List[Int] = List.range(0, data_reindexed.count().toInt)
@@ -126,7 +126,7 @@ object test extends java.io.Serializable
     var dizionario: List[List[Int]] = forest.map(List(_))
 
     // lista contenente i valori di co2
-    val col_co2 : List[Double] = data_reindexed.select("co2").map(_.getString(0)).collectAsList.map(_.toDouble).toList
+    val col_co2 = data_reindexed.select("co2").map(_.getDouble(0)).collectAsList.toList
     // lista contenente i valori di gdp
     val col_gdp = data_reindexed.select("gdp").map(_.getDouble(0)).collectAsList.toList
     // lista contenente i valori di country
@@ -160,8 +160,8 @@ object test extends java.io.Serializable
     }
 
     val cluster = number_cluster(dizionario)
-    graph(cluster, dizionario, col_co2, col_gdp, year,col_country)    // Creazione del grafico
-    //csv(cluster, data_reindexed, dizionario, sc)                    // Creazione del csv
+    graph(cluster, dizionario, col_co2, col_gdp, year, col_country)    // Creazione del grafico
+    //csv(cluster, data_reindexed, dizionario, sc)                     // Creazione del csv
   }
 
   def number_cluster(dizionario: List[List[Int]]): List[Int] = {
@@ -198,46 +198,32 @@ object test extends java.io.Serializable
         Country(col(0), col(1), col(2), col(3), col(4))
     }
 
-    ////////// PROSEGUIRE DA QUI PER IL MIGLIORAMENTO CODICE
-    // (ERRORE COLLEGATO AL BORDELLO DI COLLECTLIST RIGA 129)
+    var df = df_columnedRDD.toDF()
+    //df.show(100)
 
-    var empDF = df_columnedRDD.toDF()
-    //DF CASTING
-    /*
-    // CODICE DI PARTENZA
-    var df2 = empDF.withColumn("year", empDF("year").cast("int"))
-    df2 = empDF.withColumn("co2", empDF("co2").cast("double"))
-    df2 = empDF.withColumn("gdp", empDF("gdp").cast("double"))
-    */
-    //PROVA
-    //Change the column data type
-    empDF.withColumn("year", empDF("year").cast("int"))
-    empDF.withColumn("co2", empDF("co2").cast("double"))
-    empDF.withColumn("gdp", empDF("gdp").cast("double"))
-    var df2 = empDF
+    // Change the column data type (from string)
+    df = df.withColumn("year", df("year").cast("int"))
+    df = df.withColumn("co2", df("co2").cast("double"))
+    df = df.withColumn("gdp", df("gdp").cast("double"))
+
+    val anni : List[Int] = List.range(1990, 2014)           // List.range(a, b) = from a to b-1
+    val df_annuali = anni.map(anno => df.filter(df("year") === anno.toString))    // SI PUO' MIGLIORARE PARTIZIONANDO IL DF SENZA DOVERLO SCORRERE PER OGNI ANNO
+
+    time(df_annuali.map(ward(_, sc)))
 
 
 
-    df2.show(100)
-
-    //df2.filter(df2("year") === "1960").show(true)
-
-    var mapAnnoDF = Map[Int, DataFrame]()
-    for (anno <- 1990 to 2013) mapAnnoDF += (anno -> df2.filter(df2("year") === anno))
-    //mapAnnoDF(2003).toDF().show()
-    ////////
-    val anni : List[Int] = List.range(1990, 2014)   // List.range(a, b) = from a to b-1
-    val df_annuali : List[DataFrame] = anni.map(mapAnnoDF(_).toDF())
-    //df_annuali.par.map(ward(_, sc))
-
-    // time(for (k <- (0 to anni.length).par){      ward(df_annuali(k),sc)   })
-    // val df_RDD = sc.parallelize(df_annuali)
-
-    time(df_annuali.map(ward(_, sc))) //  senza parallellizare 48063ms
+    // PROVE DI PARALLELIZZAZIONE SUGLI ANNI  ==> si impallano
+    //time(df_annuali.par.map(ward(_, sc)))
+    //time(for (anno <- (1990 to 2013).par) ward(df.filter(df("year") === anno), sc))
+    //time(for (k <- (0 to anni.length).par) ward(df_annuali(k),sc))
 
 
-    //graphicMap(sc)
 
+    // PROVIAMO L'USO DEGLI RDD   ==> errore IllegalAccess
+    //val df_RDD = sc.parallelize(df_annuali)
+    //df_RDD.foreach(println)
+    //time(df_RDD.map(ward(_, sc)))
   }
 }
 
