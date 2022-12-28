@@ -1,6 +1,5 @@
-import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.{SparkConf, SparkContext}
 import plotly.Plotly._
 import plotly._
@@ -118,7 +117,8 @@ object test extends java.io.Serializable
 
   //def ward(data: DataFrame): Unit = {
   //def ward(data: DataFrame): (List[Int], List[List[Int]], List[Double], List[Double], Int, List[String]) = {
-  def ward(data_reindexed: DataFrame, length : Int, year : Int, col_co2 : List[Double], col_gdp : List[Double], col_country : List[String]): (List[Int], List[List[Int]], List[Double], List[Double], Int, List[String]) = {
+  //def ward(data_reindexed: DataFrame, length : Int, year : Int, col_co2 : List[Double], col_gdp : List[Double], col_country : List[String]): (List[Int], List[List[Int]], List[Double], List[Double], Int, List[String]) = {
+  def ward(length : Int, year : Int, col_co2 : List[Double], col_gdp : List[Double], col_country : List[String]): (List[Int], List[List[Int]], List[Double], List[Double], Int, List[String]) = {
 
     /*SparkSession.builder
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
@@ -258,149 +258,52 @@ object test extends java.io.Serializable
 
 
 
-    ///////////////////////////////////// PROVIAMO L'USO DEGLI RDD   ==> errore IllegalAccess
-
-    //val df_RDD = sc.parallelize(df_annuali)
-    //println("RDD PRINT")
-    //println(df_RDD)     //ParallelCollectionRDD[14] at parallelize at main.scala:254
-    //df_RDD.foreach(println)
-    //df_RDD.foreach(_.show())
-    //df_RDD.map(_.show())
-    //time(df_RDD.map(ward(_)))
+    // PROVIAMO L'USO DEGLI RDD
 
 
 
 
 
+    //// INIZIO PROVA ANNI SINGOLI
+    // NB. funziona se non si prendono 1990 ne' 2013 e se sono non troppi numeri
 
+    //val df1990 = df.filter(df("year") === "1990").toDF()
+    /*val df1991 = df.filter(df("year") === "1991").toDF()
+    val df1992 = df.filter(df("year") === "1992").toDF()
+    val df1993 = df.filter(df("year") === "1993").toDF()
+    val df1994 = df.filter(df("year") === "1994").toDF()
+    val df1995 = df.filter(df("year") === "1995").toDF()
+    val df1996 = df.filter(df("year") === "1996").toDF()
+    val df1997 = df.filter(df("year") === "1997").toDF()
+    val df1998 = df.filter(df("year") === "1998").toDF()
+    val df1999 = df.filter(df("year") === "1999").toDF()
+    val df2000 = df.filter(df("year") === "2000").toDF()
+    val df2001 = df.filter(df("year") === "2001").toDF()*/
+    val df2002 = df.filter(df("year") === "2002").toDF()
+    val df2003 = df.filter(df("year") === "2003").toDF()
+    val df2004 = df.filter(df("year") === "2004").toDF()
+    val df2005 = df.filter(df("year") === "2005").toDF()
+    val df2006 = df.filter(df("year") === "2006").toDF()
+    val df2007 = df.filter(df("year") === "2007").toDF()
+    val df2008 = df.filter(df("year") === "2008").toDF()
+    val df2009 = df.filter(df("year") === "2009").toDF()
+    val df2010 = df.filter(df("year") === "2010").toDF()
+    val df2011 = df.filter(df("year") === "2011").toDF()
+    val df2012 = df.filter(df("year") === "2012").toDF()
+    //val df2013 = df.filter(df("year") === "2013").toDF()
 
-    // PROVA CON RDD[DataFrame]
+    val df_RDD_prova = List(/*df1990,*//*df1991,df1992,df1993,df1994,df1995,df1996,df1997,df1998,df1999,df2000,df2001,*/df2002,df2003, df2004,df2005,df2006,df2007,df2008,df2009,df2010,df2011,df2012/*,df2013*/)
+    val df_annuali_reindexed = df_RDD_prova.map(_.withColumn("index", monotonically_increasing_id()))
 
-    //val df_RDD_prova = sc.parallelize(Seq(df, df))
+    //// FINE PROVA
 
-    // NB: REINDICIZZARE !!!
-    val df2009 = df.filter(df("year") === "2009").toDF().withColumn("index", monotonically_increasing_id())
-    //val df2003 = df.filter(df("year") === "2003").toDF().withColumn("index", monotonically_increasing_id())
-    //val df_RDD_prova = sc.parallelize(Seq(df2003, df2009))
+    //val df_annuali_reindexed = df_annuali.map(_.withColumn("index", monotonically_increasing_id()))
 
-    val df_RDD_prova = sc.parallelize(Seq(df2009, df2009))
-    val count = df2009.count().toInt
-    val y = df2009.select(col("year")).first.getInt(0)
-    val c_co2 = df2009.select("co2").map(_.getDouble(0)).collectAsList.toList
-    val c_gdp = df2009.select("gdp").map(_.getDouble(0)).collectAsList.toList
-    val c_country = df2009.select("country").map(_.getString(0)).collectAsList.toList
+    val input_ward_annuali = df_annuali_reindexed.map(df_anno => (df_anno.count().toInt, df_anno.select(col("year")).first.getInt(0), df_anno.select("co2").map(_.getDouble(0)).collectAsList.toList, df_anno.select("gdp").map(_.getDouble(0)).collectAsList.toList, df_anno.select("country").map(_.getString(0)).collectAsList.toList))
 
-    val foo : RDD[(List[Int], List[List[Int]], List[Double], List[Double], Int, List[String])] = df_RDD_prova.map(df => ward(df, count, y, c_co2, c_gdp, c_country))
-    //val foo1 : List[(List[Int], List[List[Int]], List[Double], List[Double], Int, List[String])] = foo.collect().toList
-    foo.collect().map(res => graph(res._1, res._2, res._3, res._4, res._5, res._6))
-
-    //val df_RDD_prova = sc.parallelize(List(List("2003", df2003_rdd), List("2009", df2009_rdd)))
-
-
-    //df_RDD_prova.first().show()
-    //df_RDD_prova.map(_.show())
-
-    //df_RDD_prova.foreach(println)
-    //df_RDD_prova.collect().foreach(println)
-
-    //println(df_RDD_prova.collect().toList)
-
-    //println(stampa.collect().toList)
-
-    //stampa.take(3).foreach(println)
-
-
-
-
-
-
-
-
-
-
-
-/*
-    // PROVA CON RDD[RDD[Row]]
-    val rows: org.apache.spark.rdd.RDD[org.apache.spark.sql.Row] = df.rdd
-
-    //flatMap() Usage
-
-    //val df_annuali = anni.map(anno => df.filter(df("year") === anno.toString).toDF())    // SI PUO' MIGLIORARE PARTIZIONANDO IL DF SENZA DOVERLO SCORRERE PER OGNI ANNO
-
-    //  .toDF("Name","language","State")
-
-    //df2.show(false)
-
-
-    var df2003_rdd1 = df.filter(df("year") === "2003").rdd
-    var df2009_rdd1 = df.filter(df("year") === "2009").rdd
-    val df_RDD_prova1 = sc.parallelize(Seq(df2003_rdd1, df2009_rdd1))
-    //df_RDD_prova1.foreach(println)
-    //df_RDD_prova1.collect().foreach(println)
-*/
-
-
-
-
-
-
-
-
-
-
-/*
-    import org.apache.spark.sql.SparkSession
-    val spark: SparkSession = SparkSession.builder()
-      .master("local[*]")
-      .appName("SparkByExamples.com")
-      .getOrCreate()
-
-    val data = Seq("Project Gutenberg’s",
-      "Alice’s Adventures in Wonderland",
-      "Project Gutenberg’s",
-      "Adventures in Wonderland",
-      "Project Gutenberg’s")
-    val rdd=spark.sparkContext.parallelize(data)
-    rdd.foreach(println)
-
-    val rdd1 = rdd.flatMap(f=>f.split(" "))
-    rdd1.foreach(println)
-
-    val arrayStructureData = Seq(
-      Row("James,,Smith",List("Java","Scala","C++"),"CA"),
-      Row("Michael,Rose,",List("Spark","Java","C++"),"NJ"),
-      Row("Robert,,Williams",List("CSharp","VB","R"),"NV")
-    )
-
-    val arrayStructureSchema = new StructType()
-      .add("name",StringType)
-      .add("languagesAtSchool", ArrayType(StringType))
-      .add("currentState", StringType)
-
-    val df_test = spark.createDataFrame(
-      spark.sparkContext.parallelize(arrayStructureData),arrayStructureSchema)
-    import spark.implicits._
-
-    df_test.show()
-
-    //flatMap() Usage
-    val df2_test=df_test.flatMap(f=> f.getSeq[String](1).map((f.getString(0),_,f.getString(2))))
-      .toDF("Name","language","State")
-
-    df2_test.show(false)
-
-    // for con gli anni usando rdd
-    //    var df_anno_rdd = df.filter(df("year") === "anno").rdd
-    //    passato dentro ward
-
-    // coulmn_rdd.toDF() confrontato con createdataframe
-
-    //convertire df_annuali in RDD
-    //val df_annuali = anni.map(anno => df.filter(df("year") === anno.toString).toDF())    // SI PUO' MIGLIORARE PARTIZIONANDO IL DF SENZA DOVERLO SCORRERE PER OGNI ANNO//
-
-
-    // non usare dataframe
- */
+    val RDD_inputWardAnnuali = sc.parallelize(input_ward_annuali)
+    val RDD_outputWardAnnuali = RDD_inputWardAnnuali.map(t => ward(t._1, t._2, t._3, t._4, t._5))
+    RDD_outputWardAnnuali.collect().map(res => graph(res._1, res._2, res._3, res._4, res._5, res._6))
   }
 }
 
