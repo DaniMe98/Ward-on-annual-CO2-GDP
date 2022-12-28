@@ -1,3 +1,5 @@
+import org.apache.spark
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{DataFrame, SQLContext, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext}
@@ -16,9 +18,18 @@ object test extends java.io.Serializable
 {
 
   var original_lenght = 0
+  val conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")
+  val sc = new SparkContext(conf)
+  val sqlContext = new SQLContext(sc)
+
+  import sqlContext.implicits._
+
 
   // Main Method
+
+  // Usata per strutturare le righe del csv in input
   case class Country(index: String, country: String, year: String, co2: String, gdp: String)
+
   case class Point(x: Double, y: Double) {
     def error_square_fun(other: Point): Double =
       pow(other.x - x, 2) + pow(other.y - y, 2)
@@ -106,7 +117,7 @@ object test extends java.io.Serializable
 
   /////////////////////////////////////
 
-  def ward(data: DataFrame, sc : SparkContext): Unit = {
+  def ward(data: DataFrame): Unit = {
 
     SparkSession.builder
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
@@ -183,11 +194,18 @@ object test extends java.io.Serializable
       file <- files if file.getName.endsWith(".html")
     } file.delete()
 
+/*
     val conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")
     val sc = new SparkContext(conf)
     val sqlContext = new SQLContext(sc)
-    import sqlContext.implicits._
+    import sqlContext.implicits._*/
 
+
+
+
+
+
+/*
     // Prende i dati in input
     val df_textRDD = sc.textFile("data_prepared.csv")
 
@@ -199,7 +217,19 @@ object test extends java.io.Serializable
     }
 
     var df = df_columnedRDD.toDF()
-    //df.show(100)
+    df.show()
+ */
+
+
+    // OTTIENE IL DF DIRETTAMENTE DAL CSV
+    var df = sqlContext.read.format("com.databricks.spark.csv").option("delimiter", ",").load("data_prepared.csv")
+    df = df.withColumnRenamed("_c0", "index")
+            .withColumnRenamed("_c1", "country")
+            .withColumnRenamed("_c2", "year")
+            .withColumnRenamed("_c3", "co2")
+            .withColumnRenamed("_c4", "gdp")
+    //df.show()
+
 
     // Change the column data type (from string)
     df = df.withColumn("year", df("year").cast("int"))
@@ -207,10 +237,11 @@ object test extends java.io.Serializable
     df = df.withColumn("gdp", df("gdp").cast("double"))
 
     val anni : List[Int] = List.range(1990, 2014)           // List.range(a, b) = from a to b-1
-    val df_annuali = anni.map(anno => df.filter(df("year") === anno.toString))    // SI PUO' MIGLIORARE PARTIZIONANDO IL DF SENZA DOVERLO SCORRERE PER OGNI ANNO
 
-    time(df_annuali.map(ward(_, sc)))
+    val df_annuali = anni.map(anno => df.filter(df("year") === anno.toString).toDF())    // SI PUO' MIGLIORARE PARTIZIONANDO IL DF SENZA DOVERLO SCORRERE PER OGNI ANNO
+    //val df_annuali = anni.map(anno => (df.filter(df("year") === anno.toString).rdd))
 
+    //time(df_annuali.map(ward(_)))
 
 
     // PROVE DI PARALLELIZZAZIONE SUGLI ANNI  ==> si impallano
@@ -220,10 +251,52 @@ object test extends java.io.Serializable
 
 
 
+
+
+
+
+
     // PROVIAMO L'USO DEGLI RDD   ==> errore IllegalAccess
+
     //val df_RDD = sc.parallelize(df_annuali)
+    //println("RDD PRINT")
+    //println(df_RDD)     //ParallelCollectionRDD[14] at parallelize at main.scala:254
     //df_RDD.foreach(println)
-    //time(df_RDD.map(ward(_, sc)))
+    //df_RDD.foreach(_.show())
+    //df_RDD.map(_.show())
+    //time(df_RDD.map(ward(_)))
+
+
+
+
+
+
+
+    // Seq[RDD[DataFrame]
+    var df2003_rdd = df.filter(df("year") === "2003").toDF()
+    var df2009_rdd = df.filter(df("year") === "2009").toDF()
+    val df_RDD_prova = sc.parallelize(Seq(df2003_rdd, df2009_rdd))
+    //val df_RDD_prova = sc.parallelize(Seq(df, df))
+    df_RDD_prova.first().show()
+    //df_RDD_prova.map(_.show())
+    //df_RDD_prova.foreach(println)
+    //df_RDD_prova.collect().foreach(println)
+
+
+
+
+
+
+
+
+
+    // Seq[RDD[RDD[Row]]
+    val rows: org.apache.spark.rdd.RDD[org.apache.spark.sql.Row] = df.rdd
+    var df2003_rdd1 = df.filter(df("year") === "2003").rdd
+    var df2009_rdd1 = df.filter(df("year") === "2009").rdd
+    val df_RDD_prova1 = sc.parallelize(Seq(df2003_rdd1, df2009_rdd1))
+    //df_RDD_prova1.foreach(println)
+    //df_RDD_prova1.collect().foreach(println)
   }
 }
 
