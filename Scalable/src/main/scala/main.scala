@@ -148,7 +148,7 @@ object test extends java.io.Serializable
     val xy_zip = col_co2 zip col_gdp
 
     // APPLICAZIONE WARD
-    println("--------------------INIZIO CALCOLO--------------------------")
+    println("--------------------INIZIO CALCOLO--------------------------"+original_lenght)
     while(forest.count(_ > -1) > 1) {   // Finche' non terminano le possibili combinazioni
 
       // Creazione delle combinazioni con i valori del forest disponibili(!= -1)
@@ -243,10 +243,9 @@ object test extends java.io.Serializable
 
     val df_annuali = anni.map(anno => df.filter(df("year") === anno.toString).toDF())    // SI PUO' MIGLIORARE PARTIZIONANDO IL DF SENZA DOVERLO SCORRERE PER OGNI ANNO
 
+
     //time(df_annuali.map(ward(_)))
-
-
-    // PROVE DI PARALLELIZZAZIONE SUGLI ANNI  ==> si impallano
+    println("Nazioni per anno ", anni.map(anno => df.filter(df("year") === anno.toString).count()))   // PROVE DI PARALLELIZZAZIONE SUGLI ANNI  ==> si impallano
     //time(df_annuali.par.map(ward(_)))
     //time(for (anno <- (1990 to 2013).par) ward(df.filter(df("year") === anno).toDF()))
     //time(for (k <- (0 to anni.length).par) ward(df_annuali(k)))
@@ -278,7 +277,7 @@ object test extends java.io.Serializable
     val df1998 = df.filter(df("year") === "1998").toDF()
     val df1999 = df.filter(df("year") === "1999").toDF()
     val df2000 = df.filter(df("year") === "2000").toDF()
-    val df2001 = df.filter(df("year") === "2001").toDF()*/
+    val df2001 = df.filter(df("year") === "2001").toDF()
     val df2002 = df.filter(df("year") === "2002").toDF()
     val df2003 = df.filter(df("year") === "2003").toDF()
     val df2004 = df.filter(df("year") === "2004").toDF()
@@ -290,20 +289,25 @@ object test extends java.io.Serializable
     val df2010 = df.filter(df("year") === "2010").toDF()
     val df2011 = df.filter(df("year") === "2011").toDF()
     val df2012 = df.filter(df("year") === "2012").toDF()
-    //val df2013 = df.filter(df("year") === "2013").toDF()
+    val df2013 = df.filter(df("year") === "2013").toDF()
 
-    val df_RDD_prova = List(/*df1990,*//*df1991,df1992,df1993,df1994,df1995,df1996,df1997,df1998,df1999,df2000,df2001,*/df2002,df2003, df2004,df2005,df2006,df2007,df2008,df2009,df2010,df2011,df2012/*,df2013*/)
+    val df_RDD_prova = List(/*df1990,*//*df1991,df1992,df1993,df1994,df1995,df1996,df1997,df1998,df1999,*/df2000,df2001,df2002,df2003, df2004,df2005,df2006,df2007,df2008,df2009,df2010,df2011,df2012,df2013)
+    val df_annuali_reindexed = df_RDD_prova_2.map(_.withColumn("index", monotonically_increasing_id()))
+
+    */
+
+    val anni_2 : List[Int] = List.range(2000, 2014)
+    val df_RDD_prova = anni_2.map(anno => df.filter(df("year") === anno.toString))    // SI PUO' MIGLIORARE PARTIZIONANDO IL DF SENZA DOVERLO SCORRERE PER OGNI ANNO
+
     val df_annuali_reindexed = df_RDD_prova.map(_.withColumn("index", monotonically_increasing_id()))
 
     //// FINE PROVA
 
-    //val df_annuali_reindexed = df_annuali.map(_.withColumn("index", monotonically_increasing_id()))
-
     val input_ward_annuali = df_annuali_reindexed.map(df_anno => (df_anno.count().toInt, df_anno.select(col("year")).first.getInt(0), df_anno.select("co2").map(_.getDouble(0)).collectAsList.toList, df_anno.select("gdp").map(_.getDouble(0)).collectAsList.toList, df_anno.select("country").map(_.getString(0)).collectAsList.toList))
-
     val RDD_inputWardAnnuali = sc.parallelize(input_ward_annuali)
     val RDD_outputWardAnnuali = RDD_inputWardAnnuali.map(t => ward(t._1, t._2, t._3, t._4, t._5))
     RDD_outputWardAnnuali.collect().map(res => graph(res._1, res._2, res._3, res._4, res._5, res._6))
+
   }
 }
 
