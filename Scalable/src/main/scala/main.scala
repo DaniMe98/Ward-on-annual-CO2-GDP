@@ -1,7 +1,6 @@
-import org.apache.spark
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{DataFrame, SQLContext, SparkSession}
+import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.{SparkConf, SparkContext}
 import plotly.Plotly._
 import plotly._
@@ -18,7 +17,7 @@ object test extends java.io.Serializable
 {
 
   var original_lenght = 0
-  val conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")
+  val conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")    // If setMaster() value is set to local[*] it means the master is running in local with all the threads available
   val sc = new SparkContext(conf)
   val sqlContext = new SQLContext(sc)
 
@@ -85,7 +84,7 @@ object test extends java.io.Serializable
   }
 
 
-  def graph(cluster: List[Int], dizionario: List[List[Int]], col_co2: List[Double], col_gdp: List[Double], year: Int,col_country: List[String]): File = {
+  def graph(cluster: List[Int], dizionario: List[List[Int]], col_co2: List[Double], col_gdp: List[Double], year: Int, col_country: List[String]): File = {
 
     var data: List[Trace] = List()
 
@@ -117,31 +116,33 @@ object test extends java.io.Serializable
 
   /////////////////////////////////////
 
-  def ward(data: DataFrame): Unit = {
+  //def ward(data: DataFrame): Unit = {
+  //def ward(data: DataFrame): (List[Int], List[List[Int]], List[Double], List[Double], Int, List[String]) = {
+  def ward(data_reindexed: DataFrame, length : Int, year : Int, col_co2 : List[Double], col_gdp : List[Double], col_country : List[String]): (List[Int], List[List[Int]], List[Double], List[Double], Int, List[String]) = {
 
-    SparkSession.builder
+    /*SparkSession.builder
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
-    import sqlContext.implicits._
+    import sqlContext.implicits._*/
 
-    val data_reindexed = data.withColumn("index", monotonically_increasing_id())    // Il DF ha gli indici discontinui, in questo modo gli indici diventano continui a partire dallo zero (0,1,2,...)
-    //data_reindexed.show()
+    //val data_reindexed = data.withColumn("index", monotonically_increasing_id())    // Il DF ha gli indici discontinui, in questo modo gli indici diventano continui a partire dallo zero (0,1,2,...)
 
-    original_lenght = data_reindexed.count().toInt
+    //original_lenght = data_reindexed.count().toInt
+    original_lenght = length
 
-    val year = data_reindexed.select(col("year")).first.getInt(0)
+    ////val year = data_reindexed.select(col("year")).first.getInt(0)
 
-    // forest = List(0, 1, 2, 3, 4, 5, 6, 7, 8 ... len(df))
-    var forest: List[Int] = List.range(0, data_reindexed.count().toInt)
+    //var forest: List[Int] = List.range(0, data_reindexed.count().toInt)     // forest = List(0, 1, 2, 3, 4, 5, 6, 7, 8 ... len(df))
+    var forest: List[Int] = List.range(0, original_lenght)
 
     // dizionario in cui sono salvate le combinazioni dei cluster
     var dizionario: List[List[Int]] = forest.map(List(_))
 
     // lista contenente i valori di co2
-    val col_co2 = data_reindexed.select("co2").map(_.getDouble(0)).collectAsList.toList
+    ////val col_co2 = data_reindexed.select("co2").map(_.getDouble(0)).collectAsList.toList
     // lista contenente i valori di gdp
-    val col_gdp = data_reindexed.select("gdp").map(_.getDouble(0)).collectAsList.toList
+    ////val col_gdp = data_reindexed.select("gdp").map(_.getDouble(0)).collectAsList.toList
     // lista contenente i valori di country
-    val col_country = data_reindexed.select("country").map(_.getString(0)).collectAsList.toList
+    ////val col_country = data_reindexed.select("country").map(_.getString(0)).collectAsList.toList
 
     // zip di co2 e gdp
     val xy_zip = col_co2 zip col_gdp
@@ -171,8 +172,10 @@ object test extends java.io.Serializable
     }
 
     val cluster = number_cluster(dizionario)
-    graph(cluster, dizionario, col_co2, col_gdp, year, col_country)    // Creazione del grafico
-    //csv(cluster, data_reindexed, dizionario, sc)                     // Creazione del csv
+    /*graph(cluster, dizionario, col_co2, col_gdp, year, col_country)    // Creazione del grafico
+    //csv(cluster, data_reindexed, dizionario, sc)                     // Creazione del csv*/
+
+    (cluster, dizionario, col_co2, col_gdp, year, col_country)
   }
 
   def number_cluster(dizionario: List[List[Int]]): List[Int] = {
@@ -239,15 +242,14 @@ object test extends java.io.Serializable
     val anni : List[Int] = List.range(1990, 2014)           // List.range(a, b) = from a to b-1
 
     val df_annuali = anni.map(anno => df.filter(df("year") === anno.toString).toDF())    // SI PUO' MIGLIORARE PARTIZIONANDO IL DF SENZA DOVERLO SCORRERE PER OGNI ANNO
-    //val df_annuali = anni.map(anno => (df.filter(df("year") === anno.toString).rdd))
 
     //time(df_annuali.map(ward(_)))
 
 
     // PROVE DI PARALLELIZZAZIONE SUGLI ANNI  ==> si impallano
-    //time(df_annuali.par.map(ward(_, sc)))
-    //time(for (anno <- (1990 to 2013).par) ward(df.filter(df("year") === anno), sc))
-    //time(for (k <- (0 to anni.length).par) ward(df_annuali(k),sc))
+    //time(df_annuali.par.map(ward(_)))
+    //time(for (anno <- (1990 to 2013).par) ward(df.filter(df("year") === anno).toDF()))
+    //time(for (k <- (0 to anni.length).par) ward(df_annuali(k)))
 
 
 
@@ -256,7 +258,7 @@ object test extends java.io.Serializable
 
 
 
-    // PROVIAMO L'USO DEGLI RDD   ==> errore IllegalAccess
+    ///////////////////////////////////// PROVIAMO L'USO DEGLI RDD   ==> errore IllegalAccess
 
     //val df_RDD = sc.parallelize(df_annuali)
     //println("RDD PRINT")
@@ -272,16 +274,40 @@ object test extends java.io.Serializable
 
 
 
-    // Seq[RDD[DataFrame]
-    var df2003_rdd = df.filter(df("year") === "2003").toDF()
-    var df2009_rdd = df.filter(df("year") === "2009").toDF()
-    val df_RDD_prova = sc.parallelize(Seq(df2003_rdd, df2009_rdd))
+    // PROVA CON RDD[DataFrame]
+
     //val df_RDD_prova = sc.parallelize(Seq(df, df))
-    df_RDD_prova.first().show()
+
+    // NB: REINDICIZZARE !!!
+    val df2009 = df.filter(df("year") === "2009").toDF().withColumn("index", monotonically_increasing_id())
+    //val df2003 = df.filter(df("year") === "2003").toDF().withColumn("index", monotonically_increasing_id())
+    //val df_RDD_prova = sc.parallelize(Seq(df2003, df2009))
+
+    val df_RDD_prova = sc.parallelize(Seq(df2009, df2009))
+    val count = df2009.count().toInt
+    val y = df2009.select(col("year")).first.getInt(0)
+    val c_co2 = df2009.select("co2").map(_.getDouble(0)).collectAsList.toList
+    val c_gdp = df2009.select("gdp").map(_.getDouble(0)).collectAsList.toList
+    val c_country = df2009.select("country").map(_.getString(0)).collectAsList.toList
+
+    val foo : RDD[(List[Int], List[List[Int]], List[Double], List[Double], Int, List[String])] = df_RDD_prova.map(df => ward(df, count, y, c_co2, c_gdp, c_country))
+    //val foo1 : List[(List[Int], List[List[Int]], List[Double], List[Double], Int, List[String])] = foo.collect().toList
+    foo.collect().map(res => graph(res._1, res._2, res._3, res._4, res._5, res._6))
+
+    //val df_RDD_prova = sc.parallelize(List(List("2003", df2003_rdd), List("2009", df2009_rdd)))
+
+
+    //df_RDD_prova.first().show()
     //df_RDD_prova.map(_.show())
+
     //df_RDD_prova.foreach(println)
     //df_RDD_prova.collect().foreach(println)
 
+    //println(df_RDD_prova.collect().toList)
+
+    //println(stampa.collect().toList)
+
+    //stampa.take(3).foreach(println)
 
 
 
@@ -290,13 +316,91 @@ object test extends java.io.Serializable
 
 
 
-    // Seq[RDD[RDD[Row]]
+
+
+
+/*
+    // PROVA CON RDD[RDD[Row]]
     val rows: org.apache.spark.rdd.RDD[org.apache.spark.sql.Row] = df.rdd
+
+    //flatMap() Usage
+
+    //val df_annuali = anni.map(anno => df.filter(df("year") === anno.toString).toDF())    // SI PUO' MIGLIORARE PARTIZIONANDO IL DF SENZA DOVERLO SCORRERE PER OGNI ANNO
+
+    //  .toDF("Name","language","State")
+
+    //df2.show(false)
+
+
     var df2003_rdd1 = df.filter(df("year") === "2003").rdd
     var df2009_rdd1 = df.filter(df("year") === "2009").rdd
     val df_RDD_prova1 = sc.parallelize(Seq(df2003_rdd1, df2009_rdd1))
     //df_RDD_prova1.foreach(println)
     //df_RDD_prova1.collect().foreach(println)
+*/
+
+
+
+
+
+
+
+
+
+
+/*
+    import org.apache.spark.sql.SparkSession
+    val spark: SparkSession = SparkSession.builder()
+      .master("local[*]")
+      .appName("SparkByExamples.com")
+      .getOrCreate()
+
+    val data = Seq("Project Gutenberg’s",
+      "Alice’s Adventures in Wonderland",
+      "Project Gutenberg’s",
+      "Adventures in Wonderland",
+      "Project Gutenberg’s")
+    val rdd=spark.sparkContext.parallelize(data)
+    rdd.foreach(println)
+
+    val rdd1 = rdd.flatMap(f=>f.split(" "))
+    rdd1.foreach(println)
+
+    val arrayStructureData = Seq(
+      Row("James,,Smith",List("Java","Scala","C++"),"CA"),
+      Row("Michael,Rose,",List("Spark","Java","C++"),"NJ"),
+      Row("Robert,,Williams",List("CSharp","VB","R"),"NV")
+    )
+
+    val arrayStructureSchema = new StructType()
+      .add("name",StringType)
+      .add("languagesAtSchool", ArrayType(StringType))
+      .add("currentState", StringType)
+
+    val df_test = spark.createDataFrame(
+      spark.sparkContext.parallelize(arrayStructureData),arrayStructureSchema)
+    import spark.implicits._
+
+    df_test.show()
+
+    //flatMap() Usage
+    val df2_test=df_test.flatMap(f=> f.getSeq[String](1).map((f.getString(0),_,f.getString(2))))
+      .toDF("Name","language","State")
+
+    df2_test.show(false)
+
+    // for con gli anni usando rdd
+    //    var df_anno_rdd = df.filter(df("year") === "anno").rdd
+    //    passato dentro ward
+
+    // coulmn_rdd.toDF() confrontato con createdataframe
+
+    //convertire df_annuali in RDD
+    //val df_annuali = anni.map(anno => df.filter(df("year") === anno.toString).toDF())    // SI PUO' MIGLIORARE PARTIZIONANDO IL DF SENZA DOVERLO SCORRERE PER OGNI ANNO//
+
+
+    // non usare dataframe
+ */
   }
 }
 
