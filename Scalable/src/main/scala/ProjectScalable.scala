@@ -1,20 +1,16 @@
-import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.functions._
 import org.apache.spark.{SparkConf, SparkContext}
-import plotly.Plotly._
 import plotly._
 import plotly.element._
 import plotly.layout._
-
 import java.io._
-import java.util.concurrent._
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 import scala.math.pow
 
 
-object test extends java.io.Serializable
-{
+object ProjectScalable {
+
   val conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")    // If setMaster() value is set to local[*] it means the master is running in local with all the threads available
   val sc = new SparkContext(conf)
   val sqlContext = new SQLContext(sc)
@@ -148,7 +144,8 @@ object test extends java.io.Serializable
     } file.delete()
 
     // Creazione df tramite il .csv
-    var df = sqlContext.read.format("com.databricks.spark.csv").option("delimiter", ",").load("data_prepared.csv")
+    //var df = sqlContext.read.format("com.databricks.spark.csv").option("delimiter", ",").load("data_prepared.csv")
+    var df = sqlContext.read.format("com.databricks.spark.csv").option("delimiter", ",").load("gs://my-bucket-scala/data_prepared.csv")     // Per GoogleCloudPlatform
     df = df.withColumnRenamed("_c0", "index")
             .withColumnRenamed("_c1", "country")
             .withColumnRenamed("_c2", "year")
