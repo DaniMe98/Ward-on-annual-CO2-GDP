@@ -4,6 +4,7 @@ import org.apache.spark.{SparkConf, SparkContext}
 import plotly._
 import plotly.element._
 import plotly.layout._
+
 import java.io._
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 import scala.math.pow
@@ -11,7 +12,10 @@ import scala.math.pow
 
 object ProjectScalable {
 
+  val path_GCP = "gs://my-bucket-scala/"      // Path iniziale del punto in cui si trovano i file in GoogleCloudPlatform (per il bucket "my-bucket-scala")
+
   val conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")    // If setMaster() value is set to local[*] it means the master is running in local with all the threads available
+  //val conf = new SparkConf().setAppName("Read CSV File").setMaster("yarn")      // Su cloud
   val sc = new SparkContext(conf)
   val sqlContext = new SQLContext(sc)
   import sqlContext.implicits._
@@ -63,26 +67,24 @@ object ProjectScalable {
     var data: List[Trace] = List()
 
     for (i <- cluster.indices) {
+
       val extractor = expand(List(cluster(i)), dizionario, col_co2.length)    // Espande le radici dei cluster madre
-      val trace = Scatter(
-        extractor.map(col_co2(_)), //List(1, 2, 3, 4),
-        extractor.map(col_gdp(_)), //List(10, 15, 13, 17),
-        mode = ScatterMode(ScatterMode.Markers),
-        text = extractor.map(col_country(_))
-      )
+
+      val trace = Scatter()
+        .withX(extractor.map(col_co2(_)))
+        .withY(extractor.map(col_gdp(_)))
+        .withMode(ScatterMode(ScatterMode.Markers))
+        .withText(extractor.map(col_country(_)))
+
       data = data :+ trace
     }
-    val xaxis = Axis(
-      title = "CO2"
-    )
-    val yaxis = Axis(
-      title = "GDP"
-    )
-    val layout = Layout(
-      title = "Ward Plot on CO2/GDP"
-    ).withXaxis(xaxis).withYaxis(yaxis)
 
-    Plotly.plot("ward_"+ year.toString +".html", data, layout, openInBrowser=false)
+    // Aggiungo la descrizione del grafico e le label degli assi
+    val xaxis = Axis().withTitle("CO2")
+    val yaxis = Axis().withTitle("GDP")
+    val layout = Layout().withTitle("Ward Plot on CO2/GDP").withXaxis(xaxis).withYaxis(yaxis)
+
+    Plotly.plot(path_GCP + "ward_" + year.toString + ".html", data, layout, openInBrowser=false)
   }
 
   def ward(length : Int, year : Int, col_co2 : List[Double], col_gdp : List[Double], col_country : List[String]): (List[Int], List[List[Int]], List[Double], List[Double], Int, List[String]) = {
@@ -121,7 +123,9 @@ object ProjectScalable {
     }
 
     val cluster = number_cluster(dizionario)
+
     //csv(cluster, data_reindexed, dizionario, sc)                     // Creazione del csv
+
     (cluster, dizionario, col_co2, col_gdp, year, col_country)
   }
   def number_cluster(dizionario: List[List[Int]]): List[Int] = {
@@ -139,13 +143,12 @@ object ProjectScalable {
 
     // Cancella tutti i grafici salvati precedentemente
     for {
-      files <- Option(new File(".").listFiles)
+      files <- Option(new File(path_GCP + ".").listFiles)
       file <- files if file.getName.endsWith(".html")
     } file.delete()
 
     // Creazione df tramite il .csv
-    //var df = sqlContext.read.format("com.databricks.spark.csv").option("delimiter", ",").load("data_prepared.csv")
-    var df = sqlContext.read.format("com.databricks.spark.csv").option("delimiter", ",").load("gs://my-bucket-scala/data_prepared.csv")     // Per GoogleCloudPlatform
+    var df = sqlContext.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_prepared.csv")     // Per GoogleCloudPlatform
     df = df.withColumnRenamed("_c0", "index")
             .withColumnRenamed("_c1", "country")
             .withColumnRenamed("_c2", "year")
