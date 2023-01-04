@@ -217,7 +217,7 @@ object ProjectScalable {
     val label_annuali = RDD_outputWardAnnuali.collect().map(outputAnnuale => cluster_label(outputAnnuale._1, outputAnnuale._2, outputAnnuale._3, outputAnnuale._4, outputAnnuale._5, outputAnnuale._6)).toList
     var dfAnnualiConLabel = (df_annuali_reindexed zip label_annuali).map(coppia => coppia._1.join(coppia._2, coppia._1("index") === coppia._2("id")))     // Aggiungo ai dataframe annuali una colonna con le label del cluster corrispondente
     dfAnnualiConLabel = dfAnnualiConLabel.map(_.drop("index").drop("id"))
-    dfAnnualiConLabel.foreach(df => df.coalesce(1).write.option("header", "true").csv(path_GCP + "output/csv_" + df.select(col("year")).first.getInt(0)))
+    dfAnnualiConLabel.foreach(df => df.write.option("header", "true").csv(path_GCP + "output/csv_" + df.select(col("year")).first.getInt(0)))
 
     val t1 = System.nanoTime()
     println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
