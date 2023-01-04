@@ -13,8 +13,8 @@ import scala.reflect.io.Directory
 
 object ProjectScalable {
 
-  val path_GCP = ""                             // Per l'esecuzione in locale
-  //val path_GCP = "gs://my-bucket-scala/"      // Path iniziale del punto in cui si trovano i file in GoogleCloudPlatform (per il bucket "my-bucket-scala")
+  //val path_GCP = ""                             // Per l'esecuzione in locale
+  val path_GCP = "gs://bucket-monstera/"      // Path iniziale del punto in cui si trovano i file in GoogleCloudPlatform (per il bucket "my-bucket-scala")
 
   /*
   val conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")    // If setMaster() value is set to local[*] it means the master is running in local with all the threads available
@@ -99,7 +99,7 @@ object ProjectScalable {
     label_indexed
   }
 
-
+/*
   def graph(cluster: List[Int], dizionario: List[List[Int]], col_co2: List[Double], col_gdp: List[Double], year: Int, col_country: List[String]): File = {
 
     var data: List[Trace] = List()
@@ -124,8 +124,7 @@ object ProjectScalable {
 
     Plotly.plot(path_GCP + "ward_" + year.toString + ".html", data, layout, openInBrowser=false)
   }
-
-
+*/
   def ward(length : Int, year : Int, col_co2 : List[Double], col_gdp : List[Double], col_country : List[String]): (List[Int], List[List[Int]], List[Double], List[Double], Int, List[String]) = {
 
     val original_lenght = length
@@ -223,13 +222,13 @@ object ProjectScalable {
     val RDD_outputWardAnnuali = RDD_inputWardAnnuali.map(t => ward(t._1, t._2, t._3, t._4, t._5))
 
     // Creazione grafici
-    RDD_outputWardAnnuali.collect().map(outputAnnuale => graph(outputAnnuale._1, outputAnnuale._2, outputAnnuale._3, outputAnnuale._4, outputAnnuale._5, outputAnnuale._6))
+    //RDD_outputWardAnnuali.collect().map(outputAnnuale => graph(outputAnnuale._1, outputAnnuale._2, outputAnnuale._3, outputAnnuale._4, outputAnnuale._5, outputAnnuale._6))
 
     // Creazione csv
     val label_annuali = RDD_outputWardAnnuali.collect().map(outputAnnuale => cluster_label(outputAnnuale._1, outputAnnuale._2, outputAnnuale._3, outputAnnuale._4, outputAnnuale._5, outputAnnuale._6)).toList
     var dfAnnualiConLabel = (df_annuali_reindexed zip label_annuali).map(coppia => coppia._1.join(coppia._2, coppia._1("index") === coppia._2("id")))     // Aggiungo ai dataframe annuali una colonna con le label del cluster corrispondente
     dfAnnualiConLabel = dfAnnualiConLabel.map(_.drop("index").drop("id"))
-    //dfAnnualiConLabel.foreach(df => df.write.option("header", "true").csv(path_GCP + "output/csv_" + df.select(col("year")).first.getInt(0)))
+    dfAnnualiConLabel.foreach(df => df.write.option("header", "true").csv(path_GCP + "output/csv_" + df.select(col("year")).first.getInt(0)))
 
     val t1 = System.nanoTime()
     println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
