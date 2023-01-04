@@ -211,32 +211,25 @@ object ProjectScalable {
     val df_annuali_reindexed = df_annuali.map(_.withColumn("index", monotonically_increasing_id()))
 
     val input_ward_annuali = df_annuali_reindexed.map(df_anno => (df_anno.count().toInt, df_anno.select(col("year")).first.getInt(0), df_anno.select("co2").map(_.getDouble(0)).collectAsList.toList, df_anno.select("gdp").map(_.getDouble(0)).collectAsList.toList, df_anno.select("country").map(_.getString(0)).collectAsList.toList))
-
     val RDD_inputWardAnnuali = spark.sparkContext.parallelize(input_ward_annuali)
-
-
     // VERSIONE DISTRIBUITA
-
     val t0 = System.nanoTime()
-
     val RDD_outputWardAnnuali = RDD_inputWardAnnuali.map(t => ward(t._1, t._2, t._3, t._4, t._5))
-
+    val t1 = System.nanoTime()
     // Creazione grafici
     //RDD_outputWardAnnuali.collect().map(outputAnnuale => graph(outputAnnuale._1, outputAnnuale._2, outputAnnuale._3, outputAnnuale._4, outputAnnuale._5, outputAnnuale._6))
 
+    println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
+    //Elapsed time: 30s
     // Creazione csv
     val label_annuali = RDD_outputWardAnnuali.collect().map(outputAnnuale => cluster_label(outputAnnuale._1, outputAnnuale._2, outputAnnuale._3, outputAnnuale._4, outputAnnuale._5, outputAnnuale._6)).toList
-    var dfAnnualiConLabel = (df_annuali_reindexed zip label_annuali).map(coppia => coppia._1.join(coppia._2, coppia._1("index") === coppia._2("id")))     // Aggiungo ai dataframe annuali una colonna con le label del cluster corrispondente
+    var dfAnnualiConLabel = (df_annuali_reindexed zip label_annuali).map(coppia => coppia._1.join(coppia._2, coppia._1("index") === coppia._2("id"))) // Aggiungo ai dataframe annuali una colonna con le label del cluster corrispondente
     dfAnnualiConLabel = dfAnnualiConLabel.map(_.drop("index").drop("id"))
     dfAnnualiConLabel.foreach(df => df.write.option("header", "true").csv(path_GCP + "output/csv_" + df.select(col("year")).first.getInt(0)))
 
-    val t1 = System.nanoTime()
-    println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
-    //Elapsed time: 30s
 
 
-
-/*
+    /*
     // VERSIONE SEQUENZIALE
     val t0 = System.nanoTime()
     val outputWardAnnuali = input_ward_annuali.map(t => ward(t._1, t._2, t._3, t._4, t._5))
