@@ -1,5 +1,5 @@
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{DataFrame, SQLContext}
+import org.apache.spark.sql.{DataFrame, SQLContext, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext}
 import plotly._
 import plotly.element._
@@ -16,11 +16,23 @@ object ProjectScalable {
   val path_GCP = ""                             // Per l'esecuzione in locale
   //val path_GCP = "gs://my-bucket-scala/"      // Path iniziale del punto in cui si trovano i file in GoogleCloudPlatform (per il bucket "my-bucket-scala")
 
+  /*
   val conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")    // If setMaster() value is set to local[*] it means the master is running in local with all the threads available
   //val conf = new SparkConf().setAppName("Read CSV File").setMaster("yarn")      // Su cloud
   val sc = new SparkContext(conf)
   val sqlContext = new SQLContext(sc)
+  */
+
+  val spark: SparkSession = SparkSession
+    .builder()
+    .master("local[*]")
+    .appName("Ward on annual co2-gdp")
+    .getOrCreate()
+
+  val session = spark.sparkContext.setLogLevel("WARN")
+  val sqlContext = spark.sqlContext
   import sqlContext.implicits._
+
 
   case class Point(x: Double, y: Double) {
     def error_square_fun(other: Point): Double =
@@ -87,7 +99,7 @@ object ProjectScalable {
     label_indexed
   }
 
-/*
+
   def graph(cluster: List[Int], dizionario: List[List[Int]], col_co2: List[Double], col_gdp: List[Double], year: Int, col_country: List[String]): File = {
 
     var data: List[Trace] = List()
@@ -112,7 +124,7 @@ object ProjectScalable {
 
     Plotly.plot(path_GCP + "ward_" + year.toString + ".html", data, layout, openInBrowser=false)
   }
-  */
+
 
   def ward(length : Int, year : Int, col_co2 : List[Double], col_gdp : List[Double], col_country : List[String]): (List[Int], List[List[Int]], List[Double], List[Double], Int, List[String]) = {
 
@@ -201,7 +213,7 @@ object ProjectScalable {
 
     val input_ward_annuali = df_annuali_reindexed.map(df_anno => (df_anno.count().toInt, df_anno.select(col("year")).first.getInt(0), df_anno.select("co2").map(_.getDouble(0)).collectAsList.toList, df_anno.select("gdp").map(_.getDouble(0)).collectAsList.toList, df_anno.select("country").map(_.getString(0)).collectAsList.toList))
 
-    val RDD_inputWardAnnuali = sc.parallelize(input_ward_annuali)
+    val RDD_inputWardAnnuali = spark.sparkContext.parallelize(input_ward_annuali)
 
 
     // VERSIONE DISTRIBUITA
@@ -211,13 +223,13 @@ object ProjectScalable {
     val RDD_outputWardAnnuali = RDD_inputWardAnnuali.map(t => ward(t._1, t._2, t._3, t._4, t._5))
 
     // Creazione grafici
-    //RDD_outputWardAnnuali.collect().map(outputAnnuale => graph(outputAnnuale._1, outputAnnuale._2, outputAnnuale._3, outputAnnuale._4, outputAnnuale._5, outputAnnuale._6))
+    RDD_outputWardAnnuali.collect().map(outputAnnuale => graph(outputAnnuale._1, outputAnnuale._2, outputAnnuale._3, outputAnnuale._4, outputAnnuale._5, outputAnnuale._6))
 
     // Creazione csv
     val label_annuali = RDD_outputWardAnnuali.collect().map(outputAnnuale => cluster_label(outputAnnuale._1, outputAnnuale._2, outputAnnuale._3, outputAnnuale._4, outputAnnuale._5, outputAnnuale._6)).toList
     var dfAnnualiConLabel = (df_annuali_reindexed zip label_annuali).map(coppia => coppia._1.join(coppia._2, coppia._1("index") === coppia._2("id")))     // Aggiungo ai dataframe annuali una colonna con le label del cluster corrispondente
     dfAnnualiConLabel = dfAnnualiConLabel.map(_.drop("index").drop("id"))
-    dfAnnualiConLabel.foreach(df => df.write.option("header", "true").csv(path_GCP + "output/csv_" + df.select(col("year")).first.getInt(0)))
+    //dfAnnualiConLabel.foreach(df => df.write.option("header", "true").csv(path_GCP + "output/csv_" + df.select(col("year")).first.getInt(0)))
 
     val t1 = System.nanoTime()
     println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
