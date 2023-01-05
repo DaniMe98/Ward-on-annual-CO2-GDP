@@ -16,16 +16,9 @@ object ProjectScalable {
   val path_GCP = ""                             // Per l'esecuzione in locale
   //val path_GCP = "gs://my-bucket-scala/"      // Path iniziale del punto in cui si trovano i file in GoogleCloudPlatform (per il bucket "my-bucket-scala")
 
-  /*
-  val conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")    // If setMaster() value is set to local[*] it means the master is running in local with all the threads available
-  //val conf = new SparkConf().setAppName("Read CSV File").setMaster("yarn")      // Su cloud
-  val sc = new SparkContext(conf)
-  val sqlContext = new SQLContext(sc)
-  */
-
   val spark: SparkSession = SparkSession
     .builder()
-    .master("local[*]")
+    .master("local[*]")     // If setMaster() value is set to local[*] it means the master is running in local with all the threads available
     .appName("Ward on annual co2-gdp")
     .getOrCreate()
 
@@ -48,6 +41,7 @@ object ProjectScalable {
   }
 
   def distance(dataFrame: List[(Double, Double)], points: List[Int], dizionario: List[List[Int]]): Double = {
+
     //0 1 2 3 4   5     6   forest
     //0 1 2 3 4 (0,1) (3,5) dizionario
     //(0,1)  (0,2) ,.... (5,6) combinazioni
@@ -92,11 +86,6 @@ object ProjectScalable {
     // Tengo soltanto le label associate ai punti (ordinate secondo l'ordinamento dei punti)
     val label: List[Int] = cluster_flat.map(_._2)
 
-    // Aggiungo indici alle label per poter fare il join con il dataframe dei punti
-    //var label_indexed: DataFrame = label.zipWithIndex.toDF()
-    //label_indexed = label_indexed.withColumnRenamed("_1", "label").withColumnRenamed("_2", "id")
-
-    //Listlabel_indexed
     label
   }
 
@@ -126,6 +115,7 @@ object ProjectScalable {
     Plotly.plot(path_GCP + "ward_" + year.toString + ".html", data, layout, openInBrowser=false)
   }
 */
+
   def ward(length : Int, year : Int, col_co2 : List[Double], col_gdp : List[Double], col_country : List[String]): List[Int] = {
 
     val original_lenght = length
@@ -163,7 +153,6 @@ object ProjectScalable {
 
     val cluster = number_cluster(dizionario)
 
-    //(cluster, dizionario, col_co2, col_gdp, year, col_country)
     cluster_label(cluster, dizionario, col_co2, col_gdp, year, col_country)
   }
 
@@ -217,9 +206,15 @@ object ProjectScalable {
     val RDD_inputWardAnnuali = spark.sparkContext.parallelize(input_ward_annuali)
 
     // VERSIONE DISTRIBUITA
+
     val t0 = System.nanoTime()
+
+    // Applicazione dell'algoritmo ward sui dataframe annuali
     val RDD_label_annuali = RDD_inputWardAnnuali.map(t => ward(t._1, t._2, t._3, t._4, t._5))
+
+    // Aggiungo indici alle label per poter fare il join con i dataframe annuali
     val indexed_label_annuali = RDD_label_annuali.collect().toList.map(_.zipWithIndex.toDF().withColumnRenamed("_1", "label").withColumnRenamed("_2", "id"))
+
     val t1 = System.nanoTime()
     println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
 
