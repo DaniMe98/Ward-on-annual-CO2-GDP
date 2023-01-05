@@ -1,6 +1,6 @@
+import org.apache.spark.SparkContext
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{DataFrame, SQLContext, SparkSession}
-import org.apache.spark.{SparkConf, SparkContext}
 import plotly._
 import plotly.element._
 import plotly.layout._
@@ -13,8 +13,8 @@ import scala.reflect.io.Directory
 
 object ProjectScalable {
 
-  //val path_GCP = ""                             // Per l'esecuzione in locale
-  val path_GCP = "gs://bucket-monstera/"      // Path iniziale del punto in cui si trovano i file in GoogleCloudPlatform (per il bucket "my-bucket-scala")
+  val path_GCP = ""                             // Per l'esecuzione in locale
+  //val path_GCP = "gs://my-bucket-scala/"      // Path iniziale del punto in cui si trovano i file in GoogleCloudPlatform (per il bucket "my-bucket-scala")
 
   /*
   val conf = new SparkConf().setAppName("Read CSV File").setMaster("local[*]")    // If setMaster() value is set to local[*] it means the master is running in local with all the threads available
@@ -76,7 +76,7 @@ object ProjectScalable {
     expanded_points
   }
 
-  def cluster_label(cluster: List[Int], dizionario: List[List[Int]], col_co2: List[Double], col_gdp: List[Double], year: Int, col_country: List[String]): DataFrame = {
+  def cluster_label(cluster: List[Int], dizionario: List[List[Int]], col_co2: List[Double], col_gdp: List[Double], year: Int, col_country: List[String]): List[Int] = {
 
     // UNIONE DEI CLUSTER LABEL AL DATAFRAME INIZIALE
 
@@ -93,10 +93,11 @@ object ProjectScalable {
     val label: List[Int] = cluster_flat.map(_._2)
 
     // Aggiungo indici alle label per poter fare il join con il dataframe dei punti
-    var label_indexed: DataFrame = label.zipWithIndex.toDF()
-    label_indexed = label_indexed.withColumnRenamed("_1", "label").withColumnRenamed("_2", "id")
+    //var label_indexed: DataFrame = label.zipWithIndex.toDF()
+    //label_indexed = label_indexed.withColumnRenamed("_1", "label").withColumnRenamed("_2", "id")
 
-    label_indexed
+    //Listlabel_indexed
+    label
   }
 
 /*
@@ -125,7 +126,7 @@ object ProjectScalable {
     Plotly.plot(path_GCP + "ward_" + year.toString + ".html", data, layout, openInBrowser=false)
   }
 */
-  def ward(length : Int, year : Int, col_co2 : List[Double], col_gdp : List[Double], col_country : List[String]): (List[Int], List[List[Int]], List[Double], List[Double], Int, List[String]) = {
+  def ward(length : Int, year : Int, col_co2 : List[Double], col_gdp : List[Double], col_country : List[String]): List[Int] = {
 
     val original_lenght = length
     var forest: List[Int] = List.range(0, original_lenght)
@@ -162,7 +163,8 @@ object ProjectScalable {
 
     val cluster = number_cluster(dizionario)
 
-    (cluster, dizionario, col_co2, col_gdp, year, col_country)
+    //(cluster, dizionario, col_co2, col_gdp, year, col_country)
+    cluster_label(cluster, dizionario, col_co2, col_gdp, year, col_country)
   }
 
   def number_cluster(dizionario: List[List[Int]]): List[Int] = {
@@ -191,7 +193,8 @@ object ProjectScalable {
     directory.deleteRecursively()
 
     // Creazione df tramite il csv
-    var df = sqlContext.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_prepared.csv")     // Per GoogleCloudPlatform
+    //var df = sqlContext.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_prepared.csv")     // Per GoogleCloudPlatform
+    var df = sqlContext.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_prepared2.csv")     // Per GoogleCloudPlatform
     df = df.withColumnRenamed("_c0", "index")
             .withColumnRenamed("_c1", "country")
             .withColumnRenamed("_c2", "year")
@@ -212,19 +215,19 @@ object ProjectScalable {
 
     val input_ward_annuali = df_annuali_reindexed.map(df_anno => (df_anno.count().toInt, df_anno.select(col("year")).first.getInt(0), df_anno.select("co2").map(_.getDouble(0)).collectAsList.toList, df_anno.select("gdp").map(_.getDouble(0)).collectAsList.toList, df_anno.select("country").map(_.getString(0)).collectAsList.toList))
     val RDD_inputWardAnnuali = spark.sparkContext.parallelize(input_ward_annuali)
+
     // VERSIONE DISTRIBUITA
     val t0 = System.nanoTime()
-    val RDD_outputWardAnnuali = RDD_inputWardAnnuali.map(t => ward(t._1, t._2, t._3, t._4, t._5))
+    val RDD_label_annuali = RDD_inputWardAnnuali.map(t => ward(t._1, t._2, t._3, t._4, t._5))
+    val indexed_label_annuali = RDD_label_annuali.collect().toList.map(_.zipWithIndex.toDF().withColumnRenamed("_1", "label").withColumnRenamed("_2", "id"))
     val t1 = System.nanoTime()
-    // Creazione grafici
-    //RDD_outputWardAnnuali.collect().map(outputAnnuale => graph(outputAnnuale._1, outputAnnuale._2, outputAnnuale._3, outputAnnuale._4, outputAnnuale._5, outputAnnuale._6))
-
     println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
-    //Elapsed time: 30s
-    // Creazione csv
-    val label_annuali = RDD_outputWardAnnuali.collect().map(outputAnnuale => cluster_label(outputAnnuale._1, outputAnnuale._2, outputAnnuale._3, outputAnnuale._4, outputAnnuale._5, outputAnnuale._6)).toList
-    var dfAnnualiConLabel = (df_annuali_reindexed zip label_annuali).map(coppia => coppia._1.join(coppia._2, coppia._1("index") === coppia._2("id"))) // Aggiungo ai dataframe annuali una colonna con le label del cluster corrispondente
+
+    // Aggiungo ai dataframe annuali una colonna con le label del cluster corrispondente
+    var dfAnnualiConLabel = (df_annuali_reindexed zip indexed_label_annuali).map(coppia => coppia._1.join(coppia._2, coppia._1("index") === coppia._2("id")))
     dfAnnualiConLabel = dfAnnualiConLabel.map(_.drop("index").drop("id"))
+
+    // Creazione csv
     dfAnnualiConLabel.foreach(df => df.write.option("header", "true").csv(path_GCP + "output/csv_" + df.select(col("year")).first.getInt(0)))
 
 
@@ -249,3 +252,6 @@ object ProjectScalable {
  */
   }
 }
+
+// Creazione grafici
+//RDD_outputWardAnnuali.collect().map(outputAnnuale => graph(outputAnnuale._1, outputAnnuale._2, outputAnnuale._3, outputAnnuale._4, outputAnnuale._5, outputAnnuale._6))
