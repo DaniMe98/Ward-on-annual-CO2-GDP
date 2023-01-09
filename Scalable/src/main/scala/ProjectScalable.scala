@@ -13,19 +13,8 @@ import scala.reflect.io.Directory
 
 object ProjectScalable {
 
-  val path_GCP = ""                             // Per l'esecuzione in locale
-  //val path_GCP = "gs://my-bucket-scala/"      // Path iniziale del punto in cui si trovano i file in GoogleCloudPlatform (per il bucket "my-bucket-scala")
-
-  val spark: SparkSession = SparkSession
-    .builder()
-    .master("local[*]")     // If setMaster() value is set to local[*] it means the master is running in local with all the threads available
-    .appName("Ward on annual co2-gdp")
-    .getOrCreate()
-
-  val session = spark.sparkContext.setLogLevel("WARN")
-  val sqlContext = spark.sqlContext
-  import sqlContext.implicits._
-
+  //val path_GCP = ""                             // Per l'esecuzione in locale
+  val path_GCP = "gs://my-bucket-scala/"      // Path iniziale del punto in cui si trovano i file in GoogleCloudPlatform (per il bucket "my-bucket-scala")
 
   case class Point(x: Double, y: Double) {
     def error_square_fun(other: Point): Double =
@@ -169,6 +158,18 @@ object ProjectScalable {
 
   def main(args: Array[String]): Unit = {
 
+    val spark: SparkSession = SparkSession
+      .builder()
+      //.master("local[*]")     // Run Spark locally with as many worker threads as logical cores on your machine
+      //.master("yarn")         // Calcolo distribuito su Google Cloud Platform
+      .appName("Ward on annual co2-gdp")
+      .getOrCreate()
+
+    spark.sparkContext.setLogLevel("WARN")      // Riduce la stampa di output
+    import spark.sqlContext.implicits._
+
+    println("MASTER: ", spark.sparkContext.getConf.get("spark.master"))
+
     /*
     // Cancella tutti i grafici salvati precedentemente
     for {
@@ -182,8 +183,8 @@ object ProjectScalable {
     directory.deleteRecursively()
 
     // Creazione df tramite il csv
-    //var df = sqlContext.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_prepared.csv")     // Per GoogleCloudPlatform
-    var df = sqlContext.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_prepared2.csv")     // Per GoogleCloudPlatform
+    //var df = spark.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_prepared.csv")     // Per GoogleCloudPlatform
+    var df = spark.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_prepared2.csv")     // Per GoogleCloudPlatform
     df = df.withColumnRenamed("_c0", "index")
             .withColumnRenamed("_c1", "country")
             .withColumnRenamed("_c2", "year")
