@@ -13,8 +13,8 @@ import scala.reflect.io.Directory
 
 object ProjectScalable {
 
-  //val path_GCP = ""                             // Per l'esecuzione in locale
-  val path_GCP = "gs://my-bucket-scala/"      // Path iniziale del punto in cui si trovano i file in GoogleCloudPlatform (per il bucket "my-bucket-scala")
+  val path_GCP = ""                             // Per l'esecuzione in locale
+  //val path_GCP = "gs://my-bucket-scala/"      // Path iniziale del punto in cui si trovano i file in GoogleCloudPlatform (per il bucket "my-bucket-scala")
 
   case class Point(x: Double, y: Double) {
     def error_square_fun(other: Point): Double =
@@ -59,12 +59,12 @@ object ProjectScalable {
     expanded_points
   }
 
-  def cluster_label(cluster: List[Int], dizionario: List[List[Int]], col_co2: List[Double], col_gdp: List[Double], year: Int, col_country: List[String]): List[Int] = {
+  def cluster_label(cluster: List[Int], dizionario: List[List[Int]], length: Int): List[Int] = {
 
     // UNIONE DEI CLUSTER LABEL AL DATAFRAME INIZIALE
 
     // Le radici dei cluster vengono espanse nei punti contenuti nel cluster
-    val cluster_expanded: List[List[Int]] = cluster.map(x => expand(List(x), dizionario, col_co2.length ))
+    val cluster_expanded: List[List[Int]] = cluster.map(x => expand(List(x), dizionario, length))
 
     // I punti dei cluster vengono associati con la label del cluster corrispondente
     val cluster_zipped: List[List[(Int, Int)]] = cluster_expanded.zipWithIndex.map(x => x._1.zip(List.fill[Int](x._1.length)(x._2)))
@@ -142,13 +142,16 @@ object ProjectScalable {
 
     val cluster = number_cluster(dizionario)
 
-    cluster_label(cluster, dizionario, col_co2, col_gdp, year, col_country)
+    cluster_label(cluster, dizionario, col_co2.length)
   }
 
   def number_cluster(dizionario: List[List[Int]]): List[Int] = {
+
     val last = dizionario.last(0)
     val out = last :: dizionario.drop(last + 1).flatten.filter(_ < last)
+
     out
+
     // last(0) = Primo elemento dell'ultima coppia del dizionario che verrà preso come cluster.
     // out =  - "concateno" last(0)
     //        - Droppo tutti i valori prima di last perchè mi interessano tutti quelli tra last(0) e last(1)
@@ -160,7 +163,7 @@ object ProjectScalable {
 
     val spark: SparkSession = SparkSession
       .builder()
-      //.master("local[*]")     // Run Spark locally with as many worker threads as logical cores on your machine
+      .master("local[*]")     // Run Spark locally with as many worker threads as logical cores on your machine
       //.master("yarn")         // Calcolo distribuito su Google Cloud Platform
       .appName("Ward on annual co2-gdp")
       .getOrCreate()
@@ -183,8 +186,8 @@ object ProjectScalable {
     directory.deleteRecursively()
 
     // Creazione df tramite il csv
-    //var df = spark.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_prepared.csv")     // Per GoogleCloudPlatform
-    var df = spark.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_prepared2.csv")     // Per GoogleCloudPlatform
+    //var df = spark.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_prepared.csv")
+    var df = spark.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_prepared2.csv")
     df = df.withColumnRenamed("_c0", "index")
             .withColumnRenamed("_c1", "country")
             .withColumnRenamed("_c2", "year")
@@ -198,6 +201,9 @@ object ProjectScalable {
     df = df.withColumn("gdp", df("gdp").cast("double"))
 
     val anni : List[Int] = List.range(1990, 2014)           // List.range(a, b) = from a to b-1
+    //val anni : List[Int] = List.range(1990, 1997)
+    //val anni : List[Int] = List.range(1990, 2003)
+    //val anni : List[Int] = List.range(1990, 2009)
 
     val df_annuali = anni.map(anno => df.filter(df("year") === anno.toString).toDF())    // SI PUO' MIGLIORARE PARTIZIONANDO IL DF SENZA DOVERLO SCORRERE PER OGNI ANNO
 
