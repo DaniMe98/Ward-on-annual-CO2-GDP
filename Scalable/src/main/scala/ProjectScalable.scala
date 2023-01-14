@@ -105,7 +105,7 @@ object ProjectScalable {
   }
 */
 
-  def ward(length : Int, year : Int, col_co2 : List[Double], col_gdp : List[Double], col_country : List[String]): List[Int] = {
+  def ward(length : Int, year : Int, col_co2 : List[Double], col_gdp : List[Double]): List[Int] = {
 
     val original_lenght = length
     var forest: List[Int] = List.range(0, original_lenght)
@@ -117,14 +117,15 @@ object ProjectScalable {
     val xy_zip = col_co2 zip col_gdp
 
     // APPLICAZIONE WARD
-    println("--------------------INIZIO CALCOLO--------------------------"+original_lenght)
+    println("-------------------- INIZIO CALCOLO - anno " + year + " -------------------- righe DF: " + original_lenght)
     while(forest.count(_ > -1) > 1) {   // Finche' non terminano le possibili combinazioni
 
       // Creazione delle combinazioni con i valori del forest disponibili(!= -1)
       val combinazioni = forest.filter(_ != (- 1)).combinations(2).toList
 
       // Mapping della lista di combinazioni con l'errore quadratico associato
-      val error_list = combinazioni.par.map(distance(xy_zip, _, dizionario))
+      val error_list = combinazioni.par.map(distance(xy_zip, _, dizionario))      // Parallelo
+      //val error_list = combinazioni.map(distance(xy_zip, _, dizionario))        // Sequenziale
 
       // Combinazione con l'errore minimo minore
       val coppia = combinazioni(error_list.indexOf(error_list.min))
@@ -187,7 +188,8 @@ object ProjectScalable {
 
     // Creazione df tramite il csv
     //var df = spark.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_prepared.csv")
-    var df = spark.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_prepared2.csv")
+    //var df = spark.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_prepared2.csv")
+    var df = spark.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_gdp_co2.csv")
     df = df.withColumnRenamed("_c0", "index")
             .withColumnRenamed("_c1", "country")
             .withColumnRenamed("_c2", "year")
@@ -200,24 +202,23 @@ object ProjectScalable {
     df = df.withColumn("co2", df("co2").cast("double"))
     df = df.withColumn("gdp", df("gdp").cast("double"))
 
-    val anni : List[Int] = List.range(1990, 2014)           // List.range(a, b) = from a to b-1
-    //val anni : List[Int] = List.range(1990, 1997)
-    //val anni : List[Int] = List.range(1990, 2003)
-    //val anni : List[Int] = List.range(1990, 2009)
+    //val anni : List[Int] = List.range(1990, 2014)         // Con data_prepared2.csv           // List.range(a, b) = from a to b-1
+    val anni : List[Int] = List.range(1965, 2019)           // Con data_gdp_co2.csv
 
-    val df_annuali = anni.map(anno => df.filter(df("year") === anno.toString).toDF())    // SI PUO' MIGLIORARE PARTIZIONANDO IL DF SENZA DOVERLO SCORRERE PER OGNI ANNO
+    val df_annuali = anni.map(anno => df.filter(df("year") === anno.toString).toDF())
 
     val df_annuali_reindexed = df_annuali.map(_.withColumn("index", monotonically_increasing_id()))
 
     val input_ward_annuali = df_annuali_reindexed.map(df_anno => (df_anno.count().toInt, df_anno.select(col("year")).first.getInt(0), df_anno.select("co2").map(_.getDouble(0)).collectAsList.toList, df_anno.select("gdp").map(_.getDouble(0)).collectAsList.toList, df_anno.select("country").map(_.getString(0)).collectAsList.toList))
     val RDD_inputWardAnnuali = spark.sparkContext.parallelize(input_ward_annuali)
 
+
     // VERSIONE DISTRIBUITA
 
     val t0 = System.nanoTime()
 
     // Applicazione dell'algoritmo ward sui dataframe annuali
-    val RDD_label_annuali = RDD_inputWardAnnuali.map(t => ward(t._1, t._2, t._3, t._4, t._5))
+    val RDD_label_annuali = RDD_inputWardAnnuali.map(t => ward(t._1, t._2, t._3, t._4))
 
     // Aggiungo indici alle label per poter fare il join con i dataframe annuali
     val indexed_label_annuali = RDD_label_annuali.collect().toList.map(_.zipWithIndex.toDF().withColumnRenamed("_1", "label").withColumnRenamed("_2", "id"))
@@ -225,33 +226,29 @@ object ProjectScalable {
     val t1 = System.nanoTime()
     println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
 
+/*
+    // VERSIONE PARALLELA
+    val t0 = System.nanoTime()
+    val label_annuali = input_ward_annuali.par.map(t => ward(t._1, t._2, t._3, t._4))
+    val indexed_label_annuali = label_annuali.par.map(_.zipWithIndex.toDF().withColumnRenamed("_1", "label").withColumnRenamed("_2", "id"))
+    val t1 = System.nanoTime()
+    println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
+*/
+/*
+    // VERSIONE SEQUENZIALE
+    val t0 = System.nanoTime()
+    val label_annuali = input_ward_annuali.map(t => ward(t._1, t._2, t._3, t._4))
+    val indexed_label_annuali = label_annuali.map(_.zipWithIndex.toDF().withColumnRenamed("_1", "label").withColumnRenamed("_2", "id"))
+    val t1 = System.nanoTime()
+    println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
+*/
+
     // Aggiungo ai dataframe annuali una colonna con le label del cluster corrispondente
     var dfAnnualiConLabel = (df_annuali_reindexed zip indexed_label_annuali).map(coppia => coppia._1.join(coppia._2, coppia._1("index") === coppia._2("id")))
     dfAnnualiConLabel = dfAnnualiConLabel.map(_.drop("index").drop("id"))
 
     // Creazione csv
     dfAnnualiConLabel.foreach(df => df.write.option("header", "true").csv(path_GCP + "output/csv_" + df.select(col("year")).first.getInt(0)))
-
-
-
-    /*
-    // VERSIONE SEQUENZIALE
-    val t0 = System.nanoTime()
-    val outputWardAnnuali = input_ward_annuali.map(t => ward(t._1, t._2, t._3, t._4, t._5))
-    outputWardAnnuali.map(res => graph(res._1, res._2, res._3, res._4, res._5, res._6))
-    val t1 = System.nanoTime()
-    println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
-    // Elapsed time: 51s
-*/
-/*
-    // VERSIONE PARALLELA
-    val t0 = System.nanoTime()
-    val outputWardAnnuali = input_ward_annuali.par.map(t => ward(t._1, t._2, t._3, t._4, t._5))
-    outputWardAnnuali.par.map(res => graph(res._1, res._2, res._3, res._4, res._5, res._6))
-    val t1 = System.nanoTime()
-    println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
-    //Elapsed time: 32s
- */
   }
 }
 
