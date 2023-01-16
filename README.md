@@ -28,6 +28,7 @@ After we find the cluster $u$ formed by the cluster $s$ and $t$ we procede by de
 We will repeat all these steps until there is only one cluster in the forest representing the root of the hierarchical tree.
 
 ### Number of clusters
+
 The algorithm allows the automatic choice of the best number of clusters based on the cutting dendogram method. The process follows the theoretical approach in which we choose the vertical branch, starting from the root, with the greatest distance and draw a horizontal line. All branches that intercept that line represent clusters. 
 
 <p align="center">
@@ -38,4 +39,53 @@ The algorithm allows the automatic choice of the best number of clusters based o
 <em>Cutting Dendogram Method (3 clusters in this figure) </em>
 </p>
 
+## Google Cloud Platform Setup
 
+#### 1. Create new Project
+
+#### 2. Create a Cloud Storage Bucket
+
+#### 3. Create a Dataproc Cluster
+To create a Dataproc cluster on the command line, run the Cloud SDK gcloud dataproc clusters create command locally in a terminal window or in Cloud Shell.
+```
+$ gcloud dataproc clusters create cluster-name \
+ --region=region \
+ --zone $ZONE \
+ --master-machine-type $MASTER_MACHINE_TYPE \
+ --num-workers $NUM_WORKERS \
+ --worker-machine-type $WORKER_MACHINE_TYPE
+```
+
+
+#### 4. Write and compile Scala code locally 
+
+#### 5. Create a jar with SBT
+  First download SBT at https://www.scala-sbt.org/.
+
+  From the root directory of the project, launch the command: ```sbt package```, this will package your project as a JAR file.
+
+#### 6. Copy the jar to a Cloud Storage bucket in your project
+You can use the gsutil command
+```$ gsutil cp ProjectName.jar gs://<bucket-name>/```
+or upload it manually from the Google Cloud Console.
+
+#### 7. Submit jar to a Dataproc Spark job
+Select the cluster's name from the cluster list, the Job type(Spark) and main class or jar specifying the Cloud Storage path to your jar (gs://your-bucket-name/ProjectName.jar).
+```
+gcloud dataproc jobs submit spark --cluster=cluster-name \
+    --region=region \
+    --jars=gs://<bucket-name>/ProjectName.jar \
+```
+
+#### 8. Shutdown your cluster
+To avoid ongoing charges, shutdown your cluster and delete the Cloud Storage resources (Cloud Storage bucket and files) used.
+
+To shutdown a cluster:
+```
+gcloud dataproc clusters delete cluster-name \
+    --region=region
+```
+To delete a bucket and all of its folders and files
+```
+gsutil rm -r gs://bucket-name/
+```
