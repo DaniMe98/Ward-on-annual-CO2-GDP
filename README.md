@@ -49,11 +49,11 @@ The algorithm allows the automatic choice of the best number of clusters based o
 To create a Dataproc cluster on the command line, run the Cloud SDK gcloud dataproc clusters create command locally in a terminal window or in Cloud Shell.
 ```
 $ gcloud dataproc clusters create <cluster-name> \
- --region=<region> \
- --zone $ZONE \
- --master-machine-type $MASTER_MACHINE_TYPE \
- --num-workers $NUM_WORKERS \
- --worker-machine-type $WORKER_MACHINE_TYPE
+    --region=<region> \
+    --zone $ZONE \
+    --master-machine-type $MASTER_MACHINE_TYPE \
+    --num-workers $NUM_WORKERS \
+    --worker-machine-type $WORKER_MACHINE_TYPE
 ```
 
 
