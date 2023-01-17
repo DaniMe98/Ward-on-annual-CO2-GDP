@@ -48,8 +48,8 @@ The algorithm allows the automatic choice of the best number of clusters based o
 #### 3. Create a Dataproc Cluster
 To create a Dataproc cluster on the command line, run the Cloud SDK gcloud dataproc clusters create command locally in a terminal window or in Cloud Shell.
 ```
-$ gcloud dataproc clusters create cluster-name \
- --region=region \
+$ gcloud dataproc clusters create <cluster-name> \
+ --region=<region> \
  --zone $ZONE \
  --master-machine-type $MASTER_MACHINE_TYPE \
  --num-workers $NUM_WORKERS \
@@ -66,16 +66,15 @@ $ gcloud dataproc clusters create cluster-name \
 
 #### 6. Copy the jar to a Cloud Storage bucket in your project
 You can use the gsutil command
-```$ gsutil cp ProjectName.jar gs://<bucket-name>/```
+```$ gsutil cp <ProjectName>.jar gs://<bucket-name>/```
 or upload it manually from the Google Cloud Console.
 
 #### 7. Submit jar to a Dataproc Spark job
-Select the cluster's name from the cluster list, the Job type (Spark) and main class or jar specifying the Cloud Storage path to your jar (```gs://<your-bucket-name>/ProjectName.jar```).
-
+Select the cluster's name from the cluster list, the Job type (Spark) and main class or jar specifying the Cloud Storage path to your jar (```gs://<bucket-name>/<ProjectName>.jar```).
 ```
-gcloud dataproc jobs submit spark --cluster=cluster-name \
-    --region=region \
-    --jars=gs://<bucket-name>/ProjectName.jar \
+$ gcloud dataproc jobs submit spark --jar=gs://<bucket-name>/<ProjectName>.jar
+    --region=<region> \
+    --cluster=<cluster-name>
 ```
 
 #### 8. Shutdown your cluster
@@ -83,10 +82,10 @@ To avoid ongoing charges, shutdown your cluster and delete the Cloud Storage res
 
 To shutdown a cluster:
 ```
-gcloud dataproc clusters delete cluster-name \
-    --region=region
+$ gcloud dataproc clusters delete cluster-name \
+    --region=<region>
 ```
 To delete a bucket and all of its folders and files
 ```
-gsutil rm -r gs://bucket-name/
+$ gsutil rm -r gs://<bucket-name>/
 ```
