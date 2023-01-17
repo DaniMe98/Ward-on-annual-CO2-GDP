@@ -151,6 +151,7 @@ object ProjectScalable {
 
     val last = dizionario.last(0)
     val out = last :: dizionario.drop(last + 1).flatten.filter(_ < last)
+
     out
 
     // last(0) = Primo elemento dell'ultima coppia del dizionario che verrà preso come cluster.
@@ -204,6 +205,7 @@ object ProjectScalable {
 
     //val anni : List[Int] = List.range(1990, 2014)         // Con data_prepared2.csv           // List.range(a, b) = from a to b-1
     val anni : List[Int] = List.range(1965, 2019)           // Con data_gdp_co2.csv
+    //val anni : List[Int] = List.range(1960, 2019)         // Con data_gdp_co2.csv
 
     val df_annuali = anni.map(anno => df.filter(df("year") === anno.toString).toDF())
 
