@@ -146,11 +146,11 @@ object ProjectScalable {
     cluster_label(cluster, dizionario, col_co2.length)
   }
 
+  // Restituisce le radici dei cluster formati
   def number_cluster(dizionario: List[List[Int]]): List[Int] = {
 
     val last = dizionario.last(0)
     val out = last :: dizionario.drop(last + 1).flatten.filter(_ < last)
-
     out
 
     // last(0) = Primo elemento dell'ultima coppia del dizionario che verrà preso come cluster.
