@@ -72,17 +72,23 @@ or upload it manually from the Google Cloud Console.
 #### 7. Submit jar to a Dataproc Spark job
 Select the cluster's name from the cluster list, the Job type (Spark) and main class or jar specifying the Cloud Storage path to your jar (```gs://<bucket-name>/<ProjectName>.jar```).
 ```
-$ gcloud dataproc jobs submit spark --jar=gs://<bucket-name>/<ProjectName>.jar
+$ gcloud dataproc jobs submit spark --jar=gs://<bucket-name>/<ProjectName>.jar \
     --region=<region> \
     --cluster=<cluster-name>
 ```
 
-#### 8. Shutdown your cluster
+#### 8. Copy output files created
+To copy the output files created, by the job, in the bucket, you can use the gsutil command (use the ```-r``` option to copy an entire directory tree)
+```gsutil cp -r gs://my-bucket-scala/output/ .```
+If you have a large number of files to transfer, you can perform a parallel multi-threaded/multi-processing copy using the top-level gsutil ```-m``` option
+```gsutil -m cp -r gs://my-bucket-scala/output/ .```
+
+#### 9. Shutdown your cluster
 To avoid ongoing charges, shutdown your cluster and delete the Cloud Storage resources (Cloud Storage bucket and files) used.
 
 To shutdown a cluster:
 ```
-$ gcloud dataproc clusters delete cluster-name \
+$ gcloud dataproc clusters delete <cluster-name> \
     --region=<region>
 ```
 To delete a bucket and all of its folders and files
