@@ -79,9 +79,14 @@ $ gcloud dataproc jobs submit spark --jar=gs://<bucket-name>/<ProjectName>.jar \
 
 #### 8. Copy output files created
 To copy the output files created, by the job, in the bucket, you can use the gsutil command (use the ```-r``` option to copy an entire directory tree)
-```gsutil cp -r gs://my-bucket-scala/output/ .```
+```
+gsutil cp -r gs://<bucket-name>/output/ <destination-directory>
+```
+
 If you have a large number of files to transfer, you can perform a parallel multi-threaded/multi-processing copy using the top-level gsutil ```-m``` option
-```gsutil -m cp -r gs://my-bucket-scala/output/ .```
+```
+gsutil -m cp -r gs://<bucket-name>/output/ <destination-directory>
+```
 
 #### 9. Shutdown your cluster
 To avoid ongoing charges, shutdown your cluster and delete the Cloud Storage resources (Cloud Storage bucket and files) used.
