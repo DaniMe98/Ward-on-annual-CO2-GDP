@@ -62,7 +62,7 @@ $ gcloud dataproc clusters create cluster-name \
 #### 5. Create a jar with SBT
   First download SBT at https://www.scala-sbt.org/.
 
-  From the root directory of the project, launch the command: ```sbt package```, this will package your project as a JAR file.
+  From the root directory of the project, launch the command: ```sbt package```. This will package your project as a JAR file, located in the ```target/scala-2.12/``` directory.
 
 #### 6. Copy the jar to a Cloud Storage bucket in your project
 You can use the gsutil command
@@ -70,7 +70,8 @@ You can use the gsutil command
 or upload it manually from the Google Cloud Console.
 
 #### 7. Submit jar to a Dataproc Spark job
-Select the cluster's name from the cluster list, the Job type(Spark) and main class or jar specifying the Cloud Storage path to your jar (gs://your-bucket-name/ProjectName.jar).
+Select the cluster's name from the cluster list, the Job type (Spark) and main class or jar specifying the Cloud Storage path to your jar (```gs://<your-bucket-name>/ProjectName.jar```).
+
 ```
 gcloud dataproc jobs submit spark --cluster=cluster-name \
     --region=region \
