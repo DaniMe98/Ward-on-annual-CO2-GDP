@@ -1,8 +1,6 @@
 # Ward-on-annual-CO2-GDP
 
-Scalable and cloud programming course.
-
-This project is based on the Ward's minimum variance clustering method applied on a dataset containing the emission values of CO2 and GDP of the countries in the world from 1965 to 2018.
+Project work for the **Scalable and Cloud Programming** course at Unibo (Master's Degree in Computer Science), made by Daniele Polidori, Giovanni Pietrucci and Danilo Meleleo.
 
 ## Ward's minimum variance method
 
