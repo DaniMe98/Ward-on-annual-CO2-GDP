@@ -1,4 +1,4 @@
-# Ward-on-annual-CO2-GDP
+# Ward on annual CO2-GDP
 
 Project work for the **Scalable and Cloud Programming** course at Unibo (Master's Degree in Computer Science), made by Daniele Polidori, Giovanni Pietrucci and Danilo Meleleo.
 
