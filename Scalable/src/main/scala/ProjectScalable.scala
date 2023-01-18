@@ -188,9 +188,8 @@ object ProjectScalable {
     directory.deleteRecursively()
 
     // Creazione df tramite il csv
-    //var df = spark.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_prepared.csv")
-    //var df = spark.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_prepared2.csv")
     var df = spark.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_gdp_co2.csv")
+    //var df = spark.read.format("com.databricks.spark.csv").option("delimiter", ",").load(path_GCP + "data_gdp_co2_with_groups.csv")
     df = df.withColumnRenamed("_c0", "index")
             .withColumnRenamed("_c1", "country")
             .withColumnRenamed("_c2", "year")
@@ -203,9 +202,9 @@ object ProjectScalable {
     df = df.withColumn("co2", df("co2").cast("double"))
     df = df.withColumn("gdp", df("gdp").cast("double"))
 
-    //val anni : List[Int] = List.range(1990, 2014)         // Con data_prepared2.csv           // List.range(a, b) = from a to b-1
-    val anni : List[Int] = List.range(1965, 2019)           // Con data_gdp_co2.csv
+    val anni : List[Int] = List.range(1965, 2019)           // Con data_gdp_co2.csv       // List.range(a, b) = from a to b-1
     //val anni : List[Int] = List.range(1960, 2019)         // Con data_gdp_co2.csv
+    //val anni : List[Int] = List.range(1990, 2014)         // Con data_gdp_co2_with_groups.csv
 
     val df_annuali = anni.map(anno => df.filter(df("year") === anno.toString).toDF())
 

@@ -1,8 +1,9 @@
-# Scalability-project
+# Ward-on-annual-CO2-GDP
 
 Scalable and cloud programming course.
 
-This project is based on the ward's minimum variance clustering applied on a dataset containing the emission values of co2 and gdp of the countries in the world.
+This project is based on the Ward's minimum variance clustering method applied on a dataset containing the emission values of CO2 and GDP of the countries in the world from 1965 to 2018.
+
 ## Ward's minimum variance method
 
 Ward's clustering is an agglomerative hierarchical clustering method based on minimizations of the total within-cluster variance.
