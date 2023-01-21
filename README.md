@@ -2,6 +2,10 @@
 
 Project work for the **Scalable and Cloud Programming** course at Unibo (Master's Degree in Computer Science), made by Daniele Polidori, Giovanni Pietrucci and Danilo Meleleo.
 
+In this project we applied the **Ward's minimum variance clustering method** on a dataset containing the emission values of CO2 and GDP of almost all the countries in the world from 1965 to 2018.
+
+It has been developed using the **Scala+Spark** framework, which allowed us to obtain a scalable and portable application, that can run on different volume of data and on different machine within a cluster in a **parallel** and **distributed** way.
+
 ## Ward's minimum variance method
 
 Ward's clustering is an agglomerative hierarchical clustering method based on minimizations of the total within-cluster variance.
