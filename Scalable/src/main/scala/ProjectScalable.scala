@@ -53,7 +53,7 @@ object ProjectScalable {
 
     var expanded_points = points
 
-    while(! (expanded_points.max < original_lenght))
+    while(expanded_points.max >= original_lenght)
       expanded_points = expanded_points.flatMap(dizionario(_))
 
     expanded_points
